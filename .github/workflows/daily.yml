@@ -1,0 +1,30 @@
+name: Daily DIBBS update
+on:
+  schedule:
+    - cron: "17 11,17 * * 1-5"   # weekdays ~7:17am and ~1:17pm Eastern (UTC 11:17 / 17:17)
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Days to pull (use 30 for first backfill)"
+        default: "5"
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: sudo apt-get install -y -q poppler-utils
+      - run: node ingest/fetch.mjs --days ${{ github.event.inputs.days || '5' }}
+      - run: node ingest/awards.mjs --days ${{ github.event.inputs.days == '30' && '30' || '7' }}
+        continue-on-error: true
+      - name: Commit data
+        run: |
+          git config user.name "bidpilot-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/rfqs.js data/awards data/award-summary.js
+          git diff --cached --quiet || git commit -m "DIBBS update $(date -u +%F)"
+          git push
