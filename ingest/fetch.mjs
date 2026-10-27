@@ -168,6 +168,58 @@ export function unzip(buf) {
   return files;
 }
 
+// Full batch-quote rows (121 columns), stored sparse {col:value} for the BidPilot batch export.
+export function parseBatchRaw(text) {
+  const m = new Map();
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t.startsWith('"')) continue;
+    const f = t.slice(1, t.endsWith('"') ? -1 : undefined).split('","');
+    if (!f[0]) continue;
+    const sp = {};
+    f.forEach((v, i) => { if (v !== '') sp[i + 1] = v; });
+    const key = `${f[0]}:${f[45] || ''}`;
+    if (!m.has(key)) m.set(key, []);
+    m.get(key).push(sp);
+  }
+  return m;
+}
+const BQ_DIR = path.resolve('data/bq');
+export function expandBq(key, c) {
+  const [sol, pr] = key.split(':');
+  const o = { ...BQ_TEMPLATE, ...c, 1: sol, 46: pr };
+  for (const k of Object.keys(o)) if (o[k] === '') delete o[k];
+  return o;
+}
+const bqShard = (sol) => (sol.slice(-1) || '_').toUpperCase();
+function loadBq() {
+  const m = new Map();
+  if (!fs.existsSync(BQ_DIR)) return m;
+  for (const f of fs.readdirSync(BQ_DIR)) {
+    if (!f.endsWith('.js')) continue;
+    const t = fs.readFileSync(path.join(BQ_DIR, f), 'utf8');
+    try { for (const [k, v] of Object.entries(JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)))) m.set(k, v.map((c) => expandBq(k, c))); } catch {}
+  }
+  return m;
+}
+// Values DIBBS pre-fills the same on nearly every row. Stored rows keep only what differs
+// (with '' marking a template column that's blank on that row); the site re-expands them.
+export const BQ_TEMPLATE = { 3: 'N', 4: 'N', 24: 'BI', 25: '1', 27: '90', 29: 'NAP', 39: 'N', 57: 'N', 62: 'N', 68: 'N', 69: 'N', 73: 'N', 77: 'N', 96: '0', 97: '0', 98: 'N', 100: 'N', 117: 'N', 120: 'N' };
+export function compactBq(sp) {
+  const o = {};
+  for (const [k, v] of Object.entries(sp)) if (k !== '1' && k !== '46' && BQ_TEMPLATE[k] !== v) o[k] = v;
+  for (const k of Object.keys(BQ_TEMPLATE)) if (!(k in sp)) o[k] = '';
+  return o;
+}
+function saveBq(m, openKeys) {
+  fs.mkdirSync(BQ_DIR, { recursive: true });
+  for (const f of fs.readdirSync(BQ_DIR)) fs.rmSync(path.join(BQ_DIR, f));
+  const by = {};
+  for (const [k, v] of m) { if (!openKeys.has(k)) continue; const s = bqShard(k.split(':')[0]); (by[s] = by[s] || {})[k] = v.map(compactBq); }
+  for (const [s, obj] of Object.entries(by)) fs.writeFileSync(path.join(BQ_DIR, `${s}.js`), `window.BQ_LOAD&&BQ_LOAD(${JSON.stringify(s)},${JSON.stringify(obj)});\n`);
+  return Object.keys(by).length;
+}
+
 // as file (inside bq zip): "NSN","CAGE","PartNumber","" one line per approved source
 export function parseAS(text) {
   const m = new Map();
@@ -200,8 +252,9 @@ const yymmddToIso = (s) => `20${s.slice(0, 2)}-${s.slice(2, 4)}-${s.slice(4, 6)}
 async function main() {
   const db = loadExisting();
   const byKey = new Map(db.rows.map((r) => [`${r[0]}:${r[2]}:${r[1]}`, r]));
-  // v2 adds inspection point (col 36): re-import all listed days once.
-  const done = new Set(db.v >= 2 ? db.imported || [] : []);
+  // v3 adds full batch rows for the DIBBS batch-quote export: re-import all listed days once.
+  const done = new Set(db.v >= 3 ? db.imported || [] : []);
+  const bqRaw = loadBq();
 
   const list = await get(`${DIBBS}/RFQ/RFQDates.aspx?category=recent`);
   const days = new Map();
@@ -222,7 +275,9 @@ async function main() {
       try {
         const zip = unzip(await get(f.bq, true));
         const name = [...zip.keys()].find((n) => /^bq.*\.txt$/i.test(n));
-        const extra = name ? parseBatch(zip.get(name).toString('latin1')) : new Map();
+        const bqText = name ? zip.get(name).toString('latin1') : '';
+        const extra = name ? parseBatch(bqText) : new Map();
+        if (name) for (const [k, v] of parseBatchRaw(bqText)) bqRaw.set(k, v);
         const asName = [...zip.keys()].find((n) => /^as.*\.txt$/i.test(n));
         const as = asName ? parseAS(zip.get(asName).toString('latin1')) : new Map();
         for (const r of recs) Object.assign(r, extra.get(`${r.sol}:${r.pr}`) || {}, { as: as.get(r.nsn) || [] });
@@ -238,7 +293,9 @@ async function main() {
   const rows = [...byKey.values()].filter((r) => !r[8] || r[8] >= today);
   rows.sort((a, b) => (a[8] || '').localeCompare(b[8] || ''));
   const keep = [...done].sort().slice(-60);
-  const out = { v: 2, updated: new Date().toISOString(), imported: keep, rows };
+  const nb = saveBq(bqRaw, new Set(rows.map((r) => `${r[0]}:${r[2]}`)));
+  log(`saved batch-quote rows in ${nb} files`);
+  const out = { v: 3, updated: new Date().toISOString(), imported: keep, rows };
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, 'window.RFQ_DATA=' + JSON.stringify(out) + ';\n');
   log(`wrote ${rows.length} open RFQ lines to ${OUT}`);
