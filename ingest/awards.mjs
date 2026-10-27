@@ -100,10 +100,12 @@ async function awardsForDate(iso) {
 export function parseLines(text) {
   const out = [];
   for (const line of text.split(/\r?\n/)) {
-    const m = line.match(/([\d,]+(?:\.\d+)?)\s+([A-Z]{2})\s+\$([\d,]+\.\d{2,5})\s+\$([\d,]+\.\d{2})/);
+    const m = line.match(/([\d,]+(?:\.\d+)?)\s+([A-Z]{2})\s+\$([\d,]+\.\d{2,5})\s+\$([\d,]+\.\d{2})(?:\s+(\d{2})([A-Z]{3})(\d{4}))?/);
     if (!m) continue;
     const qty = money(m[1]), unit = money(m[3]), tot = money(m[4]);
-    if (qty && unit && Math.abs(qty * unit - tot) <= Math.max(0.05, tot * 0.001)) out.push({ qty, ui: m[2], unit, total: tot });
+    const MON = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' };
+    const due = m[5] && MON[m[6]] ? `${m[7]}-${MON[m[6]]}-${m[5]}` : null;
+    if (qty && unit && Math.abs(qty * unit - tot) <= Math.max(0.05, tot * 0.001)) out.push({ qty, ui: m[2], unit, total: tot, due });
   }
   return out;
 }
@@ -119,9 +121,9 @@ function pdfText(buf) {
 // Storage: one file per FSC in data/awards/ (so the site only loads what it needs),
 // plus data/award-summary.js with per-NSN stats for every NSN on an open RFQ.
 // Award row order:
-// 0 contract, 1 order, 2 counter, 3 modDate, 4 cage, 5 total, 6 awardDate, 7 posted, 8 nsn, 9 nom, 10 pr, 11 sol, 12 pdf, 13 qty, 14 ui, 15 unit
+// 0 contract, 1 order, 2 counter, 3 modDate, 4 cage, 5 total, 6 awardDate, 7 posted, 8 nsn, 9 nom, 10 pr, 11 sol, 12 pdf, 13 qty, 14 ui, 15 unit, 16 delivery due date
 const DIR = path.resolve('data/awards');
-const toRow = (a) => [a.contract, a.order, a.counter, a.modDate, a.cage, a.total, a.awardDate, a.posted, a.nsn, a.nom, a.pr, a.sol, a.pdf, a.qty ?? null, a.ui ?? '', a.unit ?? null];
+const toRow = (a) => [a.contract, a.order, a.counter, a.modDate, a.cage, a.total, a.awardDate, a.posted, a.nsn, a.nom, a.pr, a.sol, a.pdf, a.qty ?? null, a.ui ?? '', a.unit ?? null, a.due ?? null];
 const key = (r) => `${r[0]}|${r[1]}|${r[2]}|${r[8]}`;
 const shard = (nsn) => (/^\d{13}$/.test(nsn) ? nsn.slice(0, 4) : 'other');
 
@@ -166,6 +168,13 @@ export function summarize(rows, year) {
 
 const DONE_FILE = path.resolve('data/award-days.json');
 const MINUTES = +(args[args.indexOf('--minutes') + 1] || 0) || 100;
+// Your CAGE code(s): awards to these are saved separately as your won orders.
+const MY_CAGES = new Set((process.env.MY_CAGES || '175A8').split(',').map((c) => c.trim().toUpperCase()).filter(Boolean));
+function writeMine(map) {
+  const mine = [...map.values()].filter((r) => MY_CAGES.has(String(r[4]).toUpperCase())).sort((a, b) => (b[6] || '').localeCompare(a[6] || ''));
+  fs.writeFileSync('data/my-awards.js', 'window.MY_AWARDS=' + JSON.stringify({ updated: new Date().toISOString(), cages: [...MY_CAGES], rows: mine }) + ';\n');
+  return mine.length;
+}
 
 function writeSummary(map, today) {
   let open = new Set();
@@ -192,6 +201,7 @@ async function main() {
     saveAll(map);
     fs.writeFileSync(DONE_FILE, JSON.stringify([...done].sort()));
     writeSummary(map, today);
+    writeMine(map);
   };
 
   for (let i = 1; i <= DAYS; i++) {
@@ -203,7 +213,7 @@ async function main() {
       for (const a of await awardsForDate(iso)) {
         const row = toRow(a);
         const old = map.get(key(row));
-        if (old) { row[13] = old[13]; row[14] = old[14]; row[15] = old[15]; }
+        if (old) { row[13] = old[13]; row[14] = old[14]; row[15] = old[15]; row[16] = old[16] ?? null; }
         map.set(key(row), row);
       }
       saveDay(iso);
@@ -215,7 +225,15 @@ async function main() {
   let hasPdftotext = true;
   try { execFileSync('pdftotext', ['-v'], { stdio: 'ignore' }); } catch { hasPdftotext = false; log('pdftotext not installed; skipping unit prices'); }
   let n = 0;
-  const todo = [...map.values()].filter((r) => r[12] && r[15] == null).sort((a, b) => (b[6] || '').localeCompare(a[6] || ''));
+  // Your own awards first (also re-read for the delivery date), then everything else newest first.
+  const isMine = (r) => MY_CAGES.has(String(r[4]).toUpperCase());
+  // Then awards for NSNs on open RFQs (the ones whose prices you'll actually use), newest first.
+  let openNsn = new Set();
+  try { const t = fs.readFileSync('data/rfqs.js', 'utf8'); openNsn = new Set(JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)).rows.map((r) => r[1])); } catch {}
+  const rank = (r) => (isMine(r) ? 2 : openNsn.has(r[8]) ? 1 : 0);
+  const todo = [...map.values()].filter((r) => r[12] && (r[15] == null || (isMine(r) && r[16] == null)))
+    .sort((a, b) => (rank(b) - rank(a)) || (b[6] || '').localeCompare(a[6] || ''));
+  log(`PDF queue: ${todo.filter((r) => rank(r) === 2).length} yours, ${todo.filter((r) => rank(r) === 1).length} for open-RFQ NSNs, ${todo.filter((r) => rank(r) === 0).length} other`);
   for (const r of hasPdftotext ? todo : []) {
     if (n >= PDF_LIMIT || left() < 60e3) break;
     n++;
@@ -223,12 +241,15 @@ async function main() {
       const lines = parseLines(pdfText(await get(r[12], true)));
       const hit = lines.find((l) => r[5] == null || Math.abs(l.total - r[5]) < 0.05) || lines[0];
       if (hit) { r[13] = hit.qty; r[14] = hit.ui; r[15] = hit.unit; } else r[15] = -1; // -1 = read, no price line found
+      r[16] = (hit && hit.due) || ''; // '' = read, no delivery date found
     } catch (e) { log('pdf failed', r[1] || r[0], e.message); }
     if (n % 100 === 0) { saveAll(map); log(`${n} PDFs read`); }
   }
 
   const files = saveAll(map);
   const withHist = writeSummary(map, today);
+  const nMine = writeMine(map);
+  log(`${nMine} awards to your CAGE (${[...MY_CAGES].join(', ')})`);
   log(`saved ${map.size} awards in ${files} FSC files; ${withHist} open NSNs have history; ${n} PDFs read`);
 }
 
