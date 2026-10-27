@@ -21,7 +21,9 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
         continue-on-error: true
       - run: node ingest/fetch.mjs --days ${{ github.event.inputs.days || '5' }}
-      - run: node ingest/awards.mjs --days ${{ github.event.inputs.days == '30' && '30' || '7' }}
+      - name: Collect awards
+        timeout-minutes: 60
+        run: node ingest/awards.mjs --days ${{ github.event.inputs.days == '30' && '30' || '7' }}
         continue-on-error: true
       - name: Commit data
         run: |
