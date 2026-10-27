@@ -90,6 +90,10 @@ td.nom{white-space:normal;min-width:160px}
       <input id="cage" placeholder="e.g. 1A2B3, 0PMV4">
       <label>Award history</label>
       <select id="hist"><option value="">Any</option><option value="has">Has award history</option><option value="nosame">Hide same winner (last 3)</option><option value="noaswon">Hide where approved source won last</option></select>
+      <div class="row2">
+        <div><label>FOB</label><select id="fobF"><option value="">Any</option><option value="O">Origin</option><option value="D">Destination</option></select></div>
+        <div><label>Insp./Accept.</label><select id="inspF"><option value="">Any</option><option value="O">Origin</option><option value="D">Destination</option></select></div>
+      </div>
       <label>RFQ type</label>
       <select id="type"><option value="">Any</option><option value="F">Fast award</option><option value="P">Auto-evaluation</option><option value="M">Manual</option><option value="I">AIDC</option></select>
       <div class="row2">
@@ -113,7 +117,7 @@ td.nom{white-space:normal;min-width:160px}
     <div class="bar"><strong id="count"></strong><span><button class="btn" id="csv">Export CSV</button></span></div>
     <div class="tw"><table>
       <thead><tr>
-        <th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC</th><th data-k="15">Sources</th><th data-k="16">Last $/ea</th><th data-k="11">Type</th><th>Status</th>
+        <th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC</th><th data-k="15">Sources</th><th data-k="16">Last $/ea</th><th data-k="12" title="FOB / Inspection &amp; acceptance point (O = Origin, D = Destination)">FOB/Insp</th><th data-k="11">Type</th><th>Status</th>
       </tr></thead>
       <tbody id="tb"></tbody>
     </table></div>
@@ -242,11 +246,13 @@ $('#saveMine').onclick=()=>{store.set('t2_myfsc',[...fscSel]);alert(`Saved ${fsc
 $('#loadMine').onclick=()=>{fscSel=new Set(store.get('t2_myfsc',[]));chips();run()};
 
 function filt(skipFsc){
-  const hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, sa=$('#sa').value, am=$('#amsc').value, ty=$('#type').value;
+  const fobF=$('#fobF').value, inspF=$('#inspF').value, hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, sa=$('#sa').value, am=$('#amsc').value, ty=$('#type').value;
   const cl=+$('#close').value||0, ml=+$('#minleft').value||0, qmin=+$('#qmin').value||0, qmax=+$('#qmax').value||0;
   return D.rows.filter(r=>{
     const as=r[15]||[];
     if(q && !(`${r[0]} ${r[1]} ${r[4]} ${r[2]} ${as.map(a=>a.join(' ')).join(' ')}`.toLowerCase().replace(/-/g,'').includes(q)))return false;
+    if(fobF && r[12]!==fobF)return false;
+    if(inspF && r[16]!==inspF)return false;
     const sm=sumOf(r);
     if(hist==='has'&&!sm)return false;
     if(hist==='nosame'&&sm&&sm[4])return false;
@@ -282,7 +288,7 @@ function renderTable(){
     <td>${r[8]||''} <span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span></td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
     <td class="nom">${esc(r[4])}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
     <td>${SA[r[9]]||r[9]}</td><td>${r[10]?`<span class="tag ${openAmsc(r[10])?'t-ok':'t-warn'}" title="${esc(AMSC[r[10]]||'')}">${r[10]}</span>`:''}</td>
-    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=sumOf(r);if(!m)return '';return `${m[0]>0?'$'+m[0].toFixed(2):''}${m[4]?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="12" class="small">No RFQs match.</td></tr>`;
+    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=sumOf(r);if(!m)return '';return `${m[0]>0?'$'+m[0].toFixed(2):''}${m[4]?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${r[12]||r[16]?`${r[12]||'?'}/${r[16]||'?'}`:''}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="13" class="small">No RFQs match.</td></tr>`;
   const pages=Math.max(1,Math.ceil(filtered.length/PER));$('#pg').textContent=`Page ${page+1} of ${pages}`;
 }
 function renderFscList(){
@@ -290,15 +296,15 @@ function renderFscList(){
   $('#fscList').innerHTML=Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,150).map(([f,n])=>`<div data-f="${f}"><span>${f} ${esc((FSC[f]||'').slice(0,30))}</span><b>${n}</b></div>`).join('')||'<div class="small">None</div>';
 }
 $('#fscList').onclick=e=>{const d=e.target.closest('[data-f]');if(d){fscSel.add(d.dataset.f);chips();run()}};
-['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
-$('#reset').onclick=()=>{['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();chips();run()};
+['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
+$('#reset').onclick=()=>{['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();chips();run()};
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=+th.dataset.k;sortDir=sortK===k?-sortDir:1;sortK=k;run()});
 $('#prev').onclick=()=>{if(page>0){page--;renderTable()}};
 $('#next').onclick=()=>{if((page+1)*PER<filtered.length){page++;renderTable()}};
 $('#tb').onclick=e=>{const tr=e.target.closest('tr[data-i]');if(tr)openDrawer(filtered[+tr.dataset.i])};
 
 function csv(rows,head){const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;const b=new Blob([[head,...rows].map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-${today}.csv`;a.click()}
-$('#csv').onclick=()=>csv(filtered.map(r=>[r[8],r[0],fmtNsn(r[1]),r[4],r[3],FSC[r[3]]||'',r[5],r[6],SA[r[9]]||r[9],r[10],TYPE[r[11]]||r[11],r[13],r[2],(r[15]||[]).map(a=>a[0]+' '+a[1]).join('; '),pdf(r)]),['Return by','Solicitation','NSN','Item','FSC','FSC name','Qty','Unit','Set-aside','AMSC','Type','Delivery days','PR','Approved sources (CAGE PN)','RFQ PDF']);
+$('#csv').onclick=()=>csv(filtered.map(r=>[r[8],r[0],fmtNsn(r[1]),r[4],r[3],FSC[r[3]]||'',r[5],r[6],SA[r[9]]||r[9],r[10],TYPE[r[11]]||r[11],r[13],r[2],(r[15]||[]).map(a=>a[0]+' '+a[1]).join('; '),r[12]==='O'?'Origin':r[12]==='D'?'Destination':'',r[16]==='O'?'Origin':r[16]==='D'?'Destination':'',pdf(r)]),['Return by','Solicitation','NSN','Item','FSC','FSC name','Qty','Unit','Set-aside','AMSC','Type','Delivery days','PR','Approved sources (CAGE PN)','FOB','Inspection/Acceptance','RFQ PDF']);
 
 // ---------- drawer ----------
 function openDrawer(r){
@@ -322,6 +328,8 @@ function openDrawer(r){
     <div>AMSC</div><div>${r[10]?`${r[10]}: ${esc(AMSC[r[10]]||'')}`:'—'}</div>
     <div>RFQ type</div><div>${TYPE[r[11]]||'—'}</div>
     <div>FOB</div><div>${r[12]==='O'?'Origin':r[12]==='D'?'Destination':'—'}</div>
+    <div>Inspection point</div><div>${r[16]==='O'?'Origin':r[16]==='D'?'Destination':'—'}</div>
+    <div>Acceptance point</div><div>${r[16]==='O'?'Origin':r[16]==='D'?'Destination':'—'} <span class="small">(confirm in RFQ PDF)</span></div>
     <div>Delivery days</div><div>${r[13]??'—'}</div>
     <div>PR</div><div>${r[2]||''}</div>
   </div>
