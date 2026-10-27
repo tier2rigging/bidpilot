@@ -22,13 +22,13 @@ jobs:
         continue-on-error: true
       - run: node ingest/fetch.mjs --days ${{ github.event.inputs.days || '5' }}
       - name: Collect awards
-        timeout-minutes: 60
-        run: node ingest/awards.mjs --days ${{ github.event.inputs.days == '30' && '30' || '7' }}
+        timeout-minutes: 130
+        run: node ingest/awards.mjs --days ${{ github.event.inputs.days == '30' && '30' || '7' }} --minutes 110
         continue-on-error: true
       - name: Commit data
         run: |
           git config user.name "bidpilot-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/rfqs.js data/awards data/award-summary.js
+          git add -A data
           git diff --cached --quiet || git commit -m "DIBBS update $(date -u +%F)"
           git push
