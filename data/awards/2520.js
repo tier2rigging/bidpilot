@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("2520",[["SPE7L027P0097","","","","62860",75,"2026-10-24","2026-10-24","2520008462375","KIT, U JOINT","7015458939","SPE7L027Q0018","https://dibbs2.bsm.dla.mil/Downloads/Awards/24OCT26/SPE7L027P0097.PDF",null,"",null]]);
