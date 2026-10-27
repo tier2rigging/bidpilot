@@ -17,7 +17,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: sudo apt-get install -y -q poppler-utils
+      - name: Install PDF reader
+        run: sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
+        continue-on-error: true
       - run: node ingest/fetch.mjs --days ${{ github.event.inputs.days || '5' }}
       - run: node ingest/awards.mjs --days ${{ github.event.inputs.days == '30' && '30' || '7' }}
         continue-on-error: true
