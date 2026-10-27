@@ -164,12 +164,41 @@ export function summarize(rows, year) {
   return out;
 }
 
+const DONE_FILE = path.resolve('data/award-days.json');
+const MINUTES = +(args[args.indexOf('--minutes') + 1] || 0) || 100;
+
+function writeSummary(map, today) {
+  let open = new Set();
+  try { const t = fs.readFileSync('data/rfqs.js', 'utf8'); open = new Set(JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)).rows.map((r) => r[1])); } catch {}
+  const all = summarize([...map.values()], today.slice(0, 4));
+  const sum = {};
+  for (const nsn of open) if (all[nsn]) sum[nsn] = all[nsn];
+  fs.writeFileSync('data/award-summary.js', 'window.AWARD_SUMMARY=' + JSON.stringify({ updated: new Date().toISOString(), total: map.size, n: sum }) + ';\n');
+  return Object.keys(sum).length;
+}
+
+// Each run has a time budget. Awards are saved after every day, so a run that is
+// cut off keeps what it collected, and the next run continues with the days not done yet.
+// The 2 most recent days are always re-checked for late postings.
 async function main() {
+  const t0 = Date.now();
+  const left = () => MINUTES * 60e3 - (Date.now() - t0);
   const map = loadAll();
+  let done = new Set();
+  try { done = new Set(JSON.parse(fs.readFileSync(DONE_FILE, 'utf8'))); } catch {}
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const saveDay = (iso) => {
+    done.add(iso);
+    saveAll(map);
+    fs.writeFileSync(DONE_FILE, JSON.stringify([...done].sort()));
+    writeSummary(map, today);
+  };
+
   for (let i = 1; i <= DAYS; i++) {
     const dt = new Date(`${today}T12:00:00Z`); dt.setUTCDate(dt.getUTCDate() - i);
     const iso = dt.toISOString().slice(0, 10);
+    if (done.has(iso) && i > 2) continue;
+    if (left() < MINUTES * 60e3 * 0.3) { log('time budget reached; remaining days continue next run'); break; }
     try {
       for (const a of await awardsForDate(iso)) {
         const row = toRow(a);
@@ -177,32 +206,30 @@ async function main() {
         if (old) { row[13] = old[13]; row[14] = old[14]; row[15] = old[15]; }
         map.set(key(row), row);
       }
+      saveDay(iso);
+      log(iso, `saved; ${map.size} awards total`);
     } catch (e) { log(iso, 'failed:', e.message); }
   }
 
-  // Fill quantity / unit price from PDFs, newest first, capped per run.
+  // Fill quantity / unit price from PDFs, newest first, with the time that's left.
   let hasPdftotext = true;
   try { execFileSync('pdftotext', ['-v'], { stdio: 'ignore' }); } catch { hasPdftotext = false; log('pdftotext not installed; skipping unit prices'); }
   let n = 0;
   const todo = [...map.values()].filter((r) => r[12] && r[15] == null).sort((a, b) => (b[6] || '').localeCompare(a[6] || ''));
   for (const r of hasPdftotext ? todo : []) {
-    if (n++ >= PDF_LIMIT) break;
+    if (n >= PDF_LIMIT || left() < 60e3) break;
+    n++;
     try {
       const lines = parseLines(pdfText(await get(r[12], true)));
       const hit = lines.find((l) => r[5] == null || Math.abs(l.total - r[5]) < 0.05) || lines[0];
       if (hit) { r[13] = hit.qty; r[14] = hit.ui; r[15] = hit.unit; } else r[15] = -1; // -1 = read, no price line found
     } catch (e) { log('pdf failed', r[1] || r[0], e.message); }
+    if (n % 100 === 0) { saveAll(map); log(`${n} PDFs read`); }
   }
 
   const files = saveAll(map);
-  // Summary only for NSNs on open RFQs keeps the file small.
-  let open = new Set();
-  try { const t = fs.readFileSync('data/rfqs.js', 'utf8'); open = new Set(JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)).rows.map((r) => r[1])); } catch {}
-  const all = summarize([...map.values()], today.slice(0, 4));
-  const sum = {};
-  for (const nsn of open) if (all[nsn]) sum[nsn] = all[nsn];
-  fs.writeFileSync('data/award-summary.js', 'window.AWARD_SUMMARY=' + JSON.stringify({ updated: new Date().toISOString(), total: map.size, n: sum }) + ';\n');
-  log(`saved ${map.size} awards in ${files} FSC files; ${Object.keys(sum).length} open NSNs have history; ${n} PDFs read`);
+  const withHist = writeSummary(map, today);
+  log(`saved ${map.size} awards in ${files} FSC files; ${withHist} open NSNs have history; ${n} PDFs read`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main().catch((e) => { console.error(e); process.exit(1); });
