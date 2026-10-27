@@ -112,7 +112,7 @@ function pdfText(buf) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awd-'));
   const f = path.join(dir, 'a.pdf');
   fs.writeFileSync(f, buf);
-  try { return execFileSync('pdftotext', ['-layout', f, '-'], { encoding: 'latin1', maxBuffer: 20e6 }); }
+  try { return execFileSync('pdftotext', ['-q', '-layout', f, '-'], { encoding: 'latin1', maxBuffer: 20e6, stdio: ['ignore', 'pipe', 'ignore'] }); }
   finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
