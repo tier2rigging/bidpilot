@@ -204,7 +204,7 @@ async function main() {
 
   const list = await get(`${DIBBS}/RFQ/RFQDates.aspx?category=recent`);
   const days = new Map();
-  for (const m of list.matchAll(/href="([^"]*\/(in|bq)(\d{6})\.(txt|zip))"/gi)) {
+  for (const m of list.matchAll(/href=["']([^"']*\/(in|bq)(\d{6})\.(txt|zip))["']/gi)) {
     const iso = yymmddToIso(m[3]);
     if (!days.has(iso)) days.set(iso, {});
     days.get(iso)[m[2].toLowerCase()] = new URL(m[1].replace(/&amp;/g, '&'), DIBBS).href;

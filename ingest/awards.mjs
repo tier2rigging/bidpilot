@@ -34,7 +34,7 @@ export function parseAwardPage(html) {
     const tr = m[0];
     const contract = span(tr, 'lblAwardBasicNumber').split(/\s*Â?»/)[0].trim();
     if (!contract) continue;
-    const pdf = (tr.match(/href="(https:\/\/dibbs2\.bsm\.dla\.mil\/Downloads\/Awards\/[^"]+\.pdf)"/i) || [])[1] || '';
+    const pdf = (tr.match(/href=["'](https:\/\/dibbs2\.bsm\.dla\.mil\/Downloads\/Awards\/[^"']+\.pdf)["']/i) || [])[1] || '';
     const doCell = (tr.match(/_lblDeliveryOrder"[^>]*>([\s\S]*?)<br>/) || [])[1] || '';
     const order = clean(doCell).split(/\s*Â?»/)[0].trim();
     rows.push({
@@ -82,10 +82,12 @@ async function awardsForDate(iso) {
   const url = `${DIBBS}/Awards/AwdRecs.aspx?Category=awddt&TypeSrch=cq&Value=${m}-${d}-${y}`;
   let html = await get(url);
   const first = parseAwardPage(html);
+  log(iso, `page 1: ${first.rows.length} rows, ${first.total} total`);
   const rows = [...first.rows];
   for (let p = 2; p <= first.pages; p++) {
     html = await postBack(url, html, 'ctl00$cph1$grdAwardSearch', `Page$${p}`);
     const pg = parseAwardPage(html);
+    log(iso, `page ${p}: ${pg.rows.length} rows`);
     rows.push(...pg.rows);
     if (pg.pages > first.pages) first.pages = pg.pages; // pager shows a window of pages
   }
