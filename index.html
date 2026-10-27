@@ -44,6 +44,15 @@ td.nom{white-space:normal;min-width:160px}
 .status button{margin:0 4px 4px 0}.status button.on{background:var(--ink);color:var(--card)}
 .aw td{font-size:12.5px;padding:5px 6px}
 .hidden{display:none}
+#modalBg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+#modalBg.hidden{display:none}
+#modalBox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(560px,100%)}
+.sync{font-size:12px;padding:3px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--line);cursor:pointer}
+.sync.ok{color:var(--ok);background:var(--okb)}.sync.err{color:var(--acc);background:var(--acc2)}
+.subtabs{display:flex;gap:6px;margin-bottom:10px}.subtabs button.on{background:var(--ink);color:var(--card)}
+.qrow{border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:8px}
+.qrow .top{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.qgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px}.qgrid input{padding:5px 7px}
 .pager{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin-top:8px}
 .banner{background:var(--warnb);color:var(--warn);padding:8px 12px;border-radius:8px;margin-bottom:10px;font-size:13px}
 </style>
@@ -52,6 +61,7 @@ td.nom{white-space:normal;min-width:160px}
 <header>
   <div class="brand"><div><h1>BID<b>PILOT</b></h1><div class="tag">Government Contracting Intelligence</div></div></div>
   <span class="meta" id="meta"></span>
+  <span class="sync" id="syncBadge" title="Sync settings">Local only</span><button class="btn" id="cfgBtn" title="Settings">⚙ Settings</button>
   <nav><button id="tabFind" class="on" title="Find and filter solicitations">Discover</button><button id="tabPipe" title="Bids, suppliers, and orders">Manage <span id="pipeCount"></span></button></nav>
 </header>
 
@@ -113,16 +123,28 @@ td.nom{white-space:normal;min-width:160px}
 
 <main id="pipeView" class="hidden" style="grid-template-columns:1fr">
   <section class="card">
-    <div class="bar"><strong>Manage: bid pipeline</strong><span><button class="btn" id="pipeCsv">Export CSV</button></span></div>
+    <div class="subtabs"><button class="btn on" id="stPipe">Bid pipeline</button><button class="btn" id="stSup">Suppliers</button></div>
+    <div id="pipePane">
+    <div class="bar"><strong>Bid pipeline</strong><span><button class="btn p" id="bulkMail">Draft RFQ emails for selected</button> <button class="btn" id="pipeCsv">Export CSV</button></span></div>
     <div class="tw"><table>
-      <thead><tr><th>Status</th><th>Return by</th><th>Solicitation</th><th>NSN</th><th>Item</th><th>Qty</th><th>Vendor</th><th>Vendor $/ea</th><th>My bid $/ea</th><th>Margin</th></tr></thead>
+      <thead><tr><th><input type="checkbox" id="selAll" style="width:auto"></th><th>Status</th><th>Return by</th><th>Solicitation</th><th>NSN</th><th>Item</th><th>Qty</th><th>Quotes</th><th>Vendor</th><th>Vendor $/ea</th><th>My bid $/ea</th><th>Margin</th></tr></thead>
       <tbody id="pb"></tbody>
     </table></div>
-    <p class="small">Pipeline is saved in this browser. Use Export CSV to back it up.</p>
+    </div>
+    <div id="supPane" class="hidden">
+    <div class="bar"><strong>Suppliers</strong><span><button class="btn p" id="supAdd">+ Add supplier</button> <button class="btn" id="supCsv">Export CSV</button></span></div>
+    <input id="supQ" placeholder="Search suppliers, CAGE, email…" style="margin-bottom:8px">
+    <div class="tw"><table>
+      <thead><tr><th>Name</th><th>CAGE</th><th>Contact</th><th>Email</th><th>Phone</th><th>Open RFQs</th><th>Quotes</th><th>Notes</th></tr></thead>
+      <tbody id="sb"></tbody>
+    </table></div>
+    </div>
+    <p class="small" id="syncNote"></p>
   </section>
 </main>
 
 <div id="drawer"></div>
+<div id="modalBg" class="hidden"><div id="modalBox"></div></div>
 
 <script src="data/fsc.js"></script>
 <script src="data/rfqs.js"></script>
@@ -149,7 +171,58 @@ const key=r=>`${r[0]}:${r[2]}:${r[1]}`;
 const pdf=r=>`${FILES}/Downloads/RFQ/${r[0].slice(-1)}/${(r[14]||r[0]+'.pdf').toUpperCase()}`;
 const openAmsc=a=>!a||a==='G'||a==='Z';
 
-let pipe=store.get('t2_pipe',{}), fscSel=new Set(store.get('t2_fscSel',[])), sortK=8, sortDir=1, page=0, PER=100, filtered=[];
+// ---------- CRM data + GitHub sync ----------
+const CFG=Object.assign({repo:'',token:'',sig:'Tier2 Rigging LLC\nCAGE: 175A8\nManorville, NY\n516-902-8843\ntier2rigging.com'},store.get('bp_cfg',{}));
+let CRM=store.get('bp_crm',null)||{pipeline:store.get('t2_pipe',{}),suppliers:{},deleted:{}};
+CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.deleted=CRM.deleted||{};
+let pipe=CRM.pipeline;
+const nowIso=()=>new Date().toISOString();
+function canon(o){return JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v)}
+function mergeCRM(a,b){
+  const out={pipeline:{},suppliers:{},deleted:{...(a.deleted||{})}};
+  for(const[k,t]of Object.entries(b.deleted||{}))if(!out.deleted[k]||t>out.deleted[k])out.deleted[k]=t;
+  for(const col of['pipeline','suppliers']){
+    const A=a[col]||{},B=b[col]||{},pre=col==='pipeline'?'p:':'s:';
+    for(const id of new Set([...Object.keys(A),...Object.keys(B)])){
+      const x=A[id],y=B[id];let w=!x?y:!y?x:((y.saved||'')>(x.saved||'')?y:x);
+      if(col==='pipeline'&&x&&y&&w){const q={...(x.quotes||{})};for(const[s,v]of Object.entries(y.quotes||{}))if(!q[s]||(v.date||'')>(q[s].date||''))q[s]=v;w={...w,quotes:q}}
+      const del=out.deleted[pre+id];if(w&&!(del&&del>=(w.saved||'')))out[col][id]=w;
+    }
+  }
+  return out;
+}
+const b64e=s=>btoa(unescape(encodeURIComponent(s))), b64d=s=>decodeURIComponent(escape(atob(s.replace(/\s/g,''))));
+function syncBadge(t,cls){const b=$('#syncBadge');b.textContent=t;b.className='sync '+(cls||'');const n=$('#syncNote');if(n)n.textContent=CFG.repo&&CFG.token?`Synced to private repo ${CFG.repo} (crm.json). Works on any device where you enter the same repo and token in Settings.`:'Saved in this browser only. Add a private repo in ⚙ Settings to sync across devices.'}
+async function gh(method,body){return fetch(`https://api.github.com/repos/${CFG.repo}/contents/crm.json`,{method,cache:'no-store',headers:{Authorization:'Bearer '+CFG.token,Accept:'application/vnd.github+json',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined})}
+let syncT=null,syncing=false;
+function scheduleSync(){if(!CFG.repo||!CFG.token){syncBadge('Local only');return}clearTimeout(syncT);syncBadge('Saving…');syncT=setTimeout(sync,1200)}
+async function sync(){
+  if(!CFG.repo||!CFG.token){syncBadge('Local only');return}
+  if(syncing){scheduleSync();return}
+  syncing=true;syncBadge('Syncing…');
+  try{
+    for(let i=0;i<3;i++){
+      let remote={pipeline:{},suppliers:{},deleted:{}},sha;
+      const g=await gh('GET');
+      if(g.status===200){const j=await g.json();sha=j.sha;remote=JSON.parse(b64d(j.content||'')||'{}')}
+      else if(g.status!==404)throw new Error(g.status===401?'bad token':g.status===404?'repo not found':'GitHub '+g.status);
+      const merged=mergeCRM(remote,CRM);
+      CRM=merged;pipe=CRM.pipeline;store.set('bp_crm',CRM);
+      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},deleted:remote.deleted||{}}))break;
+      const p=await gh('PUT',{message:'BidPilot CRM update',content:b64e(JSON.stringify(merged,null,1)),...(sha?{sha}:{})});
+      if(p.status===409||p.status===422)continue;
+      if(!p.ok)throw new Error(p.status===403||p.status===404?'token needs Contents read/write on this repo':'GitHub '+p.status);
+      break;
+    }
+    syncBadge('Synced ✓','ok');refreshViews();
+  }catch(e){syncBadge('Sync error','err');$('#syncBadge').title=e.message}
+  finally{syncing=false}
+}
+function crmSave(){CRM.pipeline=pipe;store.set('bp_crm',CRM);scheduleSync()}
+function delPipe(k){delete pipe[k];CRM.deleted['p:'+k]=nowIso();crmSave()}
+function refreshViews(){pipeCount();renderTable();if(!$('#pipeView').classList.contains('hidden')){renderPipe();renderSup()}}
+
+let fscSel=new Set(store.get('t2_fscSel',[])), sortK=8, sortDir=1, page=0, PER=100, filtered=[];
 
 // meta
 $('#meta').textContent=`${D.rows.length.toLocaleString()} open RFQ lines · updated ${D.updated?new Date(D.updated).toLocaleString():'—'}`;
@@ -256,6 +329,10 @@ function openDrawer(r){
   ${(r[15]||[]).length?`<div class="small">DLA will only accept these exact parts. As a reseller, buy from the CAGE or an authorized distributor and keep traceability.</div>
   <table class="aw"><tbody>${r[15].map(([c,pn])=>`<tr><td><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(c)}&page=1">${esc(c)}</a></td><td>${esc(pn)}</td><td><a target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent('"'+pn+'"')}">Find distributors</a></td></tr>`).join('')}</tbody></table>`
   :'<div class="small">None listed. Check the RFQ PDF for spec or drawing requirements before quoting.</div>'}
+  <h3 style="font-size:15px;margin:14px 0 4px">Suppliers &amp; quotes</h3>
+  <div class="small">Draft an RFQ email (opens in Thunderbird), then log the quote you get back. "Use" copies it into the bid calculator.</div>
+  <div id="qList"></div>
+  <div style="display:flex;gap:6px;margin-top:8px"><select id="qLink" style="flex:1"><option value="">Link a supplier…</option></select><button class="btn" id="qNew">+ New supplier</button></div>
   <label>Pipeline status</label>
   <div class="status">${STAT.map(s=>`<button class="btn ${p.status===s?'on':''}" data-s="${s}">${s}</button>`).join('')}${p.status?'<button class="btn" data-s="">Remove</button>':''}</div>
   <div class="row2"><div><label>Vendor</label><input id="pv" value="${esc(p.vendor||'')}"></div><div><label>Vendor $/ea</label><input id="pc" type="number" step="0.01" value="${p.cost??''}"></div></div>
@@ -277,10 +354,11 @@ function openDrawer(r){
   ['#pc','#ps','#pb2'].forEach(s=>$(s).oninput=mcalc);mcalc();
   const save=status=>{
     const cur={...(pipe[k]||{}),status:status??((pipe[k]||{}).status||'Watching'),vendor:$('#pv').value,cost:$('#pc').value===''?null:+$('#pc').value,ship:$('#ps').value===''?null:+$('#ps').value,bid:$('#pb2').value===''?null:+$('#pb2').value,notes:$('#pn').value,row:r,saved:new Date().toISOString()};
-    if(status==='')delete pipe[k];else pipe[k]=cur; store.set('t2_pipe',pipe); pipeCount(); renderTable(); openDrawer(r);
+    if(status==='')delPipe(k);else{pipe[k]=cur;crmSave()} pipeCount(); renderTable(); openDrawer(r);
   };
   dr.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>save(b.dataset.s));
   $('#psave').onclick=()=>save();
+  renderQuotes(r);
   awards(r[3]);
   nsnAwards(r);
 }
@@ -323,17 +401,129 @@ async function awards(fsc){
 
 // ---------- pipeline ----------
 function pipeCount(){const n=Object.keys(pipe).length;$('#pipeCount').textContent=n?`(${n})`:''}
+const SEL=new Set();
 function renderPipe(){
   const items=Object.values(pipe).sort((a,b)=>(a.row[8]||'').localeCompare(b.row[8]||''));
-  $('#pb').innerHTML=items.map(p=>{const r=p.row,q=r[5]||1,m=p.cost&&p.bid?((p.bid*q-(p.cost*q+(p.ship||0)))/(p.bid*q)*100).toFixed(1)+'%':'';
-    return `<tr data-k="${key(r)}"><td><span class="tag t-acc">${p.status}</span></td><td>${r[8]}</td><td>${r[0]}</td><td>${fmtNsn(r[1])}</td><td class="nom">${esc(r[4])}</td><td>${r[5]??''}</td><td>${esc(p.vendor||'')}</td><td>${p.cost??''}</td><td>${p.bid??''}</td><td>${m}</td></tr>`}).join('')||'<tr><td colspan="10" class="small">Nothing tracked yet. Open an RFQ and set a status.</td></tr>';
+  $('#pb').innerHTML=items.map(p=>{const r=p.row,k=key(r),q=r[5]||1,m=p.cost&&p.bid?((p.bid*q-(p.cost*q+(p.ship||0)))/(p.bid*q)*100).toFixed(1)+'%':'';
+    const qs=Object.values(p.quotes||{}),got=qs.filter(x=>x.price!=null).length;
+    return `<tr data-k="${k}"><td><input type="checkbox" class="sel" data-k="${k}" ${SEL.has(k)?'checked':''} style="width:auto"></td><td><span class="tag t-acc">${p.status}</span></td><td>${r[8]} <span class="small">${daysLeft(r[8])}d</span></td><td>${r[0]}</td><td>${fmtNsn(r[1])}</td><td class="nom">${esc(r[4])}</td><td>${r[5]??''}</td><td>${qs.length?`${got}/${qs.length}`:''}</td><td>${esc(p.vendor||'')}</td><td>${p.cost??''}</td><td>${p.bid??''}</td><td>${m}</td></tr>`}).join('')||'<tr><td colspan="12" class="small">Nothing tracked yet. Open an RFQ and set a status.</td></tr>';
 }
-$('#pb').onclick=e=>{const tr=e.target.closest('tr[data-k]');if(tr)openDrawer(pipe[tr.dataset.k].row)};
-$('#pipeCsv').onclick=()=>csv(Object.values(pipe).map(p=>{const r=p.row;return[p.status,r[8],r[0],fmtNsn(r[1]),r[4],r[5],p.vendor,p.cost,p.ship,p.bid,p.notes]}),['Status','Return by','Solicitation','NSN','Item','Qty','Vendor','Vendor $/ea','Shipping','My bid $/ea','Notes']);
-$('#tabFind').onclick=()=>{$('#findView').classList.remove('hidden');$('#pipeView').classList.add('hidden');$('#tabFind').classList.add('on');$('#tabPipe').classList.remove('on')};
-$('#tabPipe').onclick=()=>{$('#pipeView').classList.remove('hidden');$('#findView').classList.add('hidden');$('#tabPipe').classList.add('on');$('#tabFind').classList.remove('on');renderPipe()};
+$('#pb').onclick=e=>{if(e.target.classList.contains('sel')){const k=e.target.dataset.k;e.target.checked?SEL.add(k):SEL.delete(k);return}const tr=e.target.closest('tr[data-k]');if(tr)openDrawer(pipe[tr.dataset.k].row)};
+$('#selAll').onclick=e=>{SEL.clear();if(e.target.checked)Object.keys(pipe).forEach(k=>SEL.add(k));renderPipe()};
 
-chips(); pipeCount(); run();
+// ---------- suppliers ----------
+let CAGE_OPEN=null;
+function cageOpen(){if(!CAGE_OPEN){CAGE_OPEN={};for(const r of D.rows)for(const a of(r[15]||[]))CAGE_OPEN[a[0]]=(CAGE_OPEN[a[0]]||0)+1}return CAGE_OPEN}
+const sups=()=>Object.values(CRM.suppliers).sort((a,b)=>(a.name||a.cage||'').localeCompare(b.name||b.cage||''));
+const supByCage=c=>Object.values(CRM.suppliers).find(s=>s.cage&&s.cage.toUpperCase()===String(c).toUpperCase());
+function quoteCount(id){let n=0;for(const p of Object.values(pipe))if(p.quotes&&p.quotes[id]&&p.quotes[id].price!=null)n++;return n}
+function renderSup(){
+  const q=($('#supQ').value||'').toLowerCase(),co=cageOpen();
+  const list=sups().filter(s=>!q||[s.name,s.cage,s.email,s.contact,s.notes].join(' ').toLowerCase().includes(q));
+  $('#sb').innerHTML=list.map(s=>`<tr data-id="${esc(s.id)}"><td>${esc(s.name||'')}</td><td>${s.cage?`<a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(s.cage)}&page=1">${esc(s.cage)}</a>`:''}</td><td>${esc(s.contact||'')}</td><td>${esc(s.email||'')}</td><td>${esc(s.phone||'')}</td>
+    <td>${s.cage&&co[s.cage]?`<a href="#" class="cageGo" data-c="${esc(s.cage)}">${co[s.cage]}</a>`:''}</td><td>${quoteCount(s.id)||''}</td><td class="nom">${esc((s.notes||'').slice(0,60))}</td></tr>`).join('')||'<tr><td colspan="8" class="small">No suppliers yet. Add one here, or from an RFQ\'s approved sources.</td></tr>';
+}
+$('#supQ').oninput=renderSup;
+$('#sb').onclick=e=>{const g=e.target.closest('.cageGo');if(g){e.preventDefault();$('#tabFind').click();$('#cage').value=g.dataset.c;page=0;run();return}if(e.target.closest('a'))return;const tr=e.target.closest('tr[data-id]');if(tr)supForm(CRM.suppliers[tr.dataset.id])};
+$('#supAdd').onclick=()=>supForm({});
+$('#supCsv').onclick=()=>csv(sups().map(s=>[s.name,s.cage,s.contact,s.email,s.phone,s.website,s.notes]),['Name','CAGE','Contact','Email','Phone','Website','Notes']);
+function modal(html){$('#modalBox').innerHTML=html;$('#modalBg').classList.remove('hidden')}
+function closeModal(){$('#modalBg').classList.add('hidden')}
+$('#modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};
+function supForm(s,after){
+  s=s||{};const f=(id,l,v,t='text')=>`<div><label>${l}</label><input id="${id}" type="${t}" value="${esc(v||'')}"></div>`;
+  modal(`<div class="bar"><strong>${s.id?'Edit supplier':'New supplier'}</strong><button class="btn" id="mX">✕</button></div>
+  ${f('sName','Company name',s.name)}<div class="row2">${f('sCage','CAGE',s.cage)}${f('sContact','Contact name',s.contact)}</div>
+  <div class="row2">${f('sEmail','Email (for RFQs)',s.email,'email')}${f('sPhone','Phone',s.phone)}</div>${f('sWeb','Website',s.website)}
+  <label>Notes</label><textarea id="sNotes" rows="3">${esc(s.notes||'')}</textarea>
+  ${s.cage?`<div class="small" style="margin-top:6px"><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(s.cage)}&page=1">Look up ${esc(s.cage)} on DLA CAGE</a> for the company name and address.</div>`:''}
+  <div style="display:flex;justify-content:space-between;margin-top:10px"><button class="btn p" id="sSave">Save</button>${s.id?'<button class="btn" id="sDel">Delete</button>':''}</div>`);
+  $('#mX').onclick=closeModal;
+  $('#sSave').onclick=()=>{
+    const cage=$('#sCage').value.trim().toUpperCase(),dup=cage&&supByCage(cage);
+    const id=s.id||(dup&&dup.id)||(cage||('s'+Date.now().toString(36)));
+    CRM.suppliers[id]={...(CRM.suppliers[id]||{}),id,name:$('#sName').value.trim(),cage,contact:$('#sContact').value.trim(),email:$('#sEmail').value.trim(),phone:$('#sPhone').value.trim(),website:$('#sWeb').value.trim(),notes:$('#sNotes').value,saved:nowIso()};
+    crmSave();closeModal();renderSup();after&&after(id);
+  };
+  if(s.id)$('#sDel').onclick=()=>{if(!confirmDel())return;delete CRM.suppliers[s.id];CRM.deleted['s:'+s.id]=nowIso();crmSave();closeModal();renderSup()};
+}
+function confirmDel(){return window.confirm?confirm('Delete this supplier?'):true}
+
+// ---------- RFQ emails ----------
+function mailBody(sup,rows){
+  const lines=rows.map(r=>{const pn=sup.cage&&(r[15]||[]).find(a=>a[0]===sup.cage);
+    return `- NSN ${fmtNsn(r[1])}${pn?` / P/N ${pn[1]} (CAGE ${sup.cage})`:''}\n  ${r[4]}\n  Qty: ${r[5]??''} ${r[6]||''}${r[13]?` | Delivery required within ${r[13]} days ARO`:''}\n  Ref: ${r[0]}`}).join('\n\n');
+  return `Hello${sup.contact?' '+sup.contact:''},\n\nTier2 Rigging LLC (CAGE 175A8) is requesting a quote on the following:\n\n${lines}\n\nPlease include:\n- Unit price (and any quantity breaks)\n- Lead time (days ARO)\n- Country of origin\n- Shipping weight and dimensions\n- Quote valid through date\n- Certificate of Conformance / traceability available (Y/N)\n\nThank you,\n${CFG.sig}`;
+}
+function mailto(sup,rows){
+  const subj=rows.length===1?`RFQ: ${rows[0][4]} | NSN ${fmtNsn(rows[0][1])}`:`RFQ: ${rows.length} items | Tier2 Rigging LLC`;
+  return `mailto:${encodeURIComponent(sup.email)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(mailBody(sup,rows))}`;
+}
+function markRequested(rows,sid){
+  for(const r of rows){const k=key(r),p=pipe[k]||{status:'Sourcing',row:r};p.row=r;if(!p.status||p.status==='Watching')p.status='Sourcing';
+    p.quotes=p.quotes||{};p.quotes[sid]={...(p.quotes[sid]||{}),requested:today,date:nowIso()};p.saved=nowIso();pipe[k]=p}
+  crmSave();pipeCount();renderTable();
+}
+function candSups(r){
+  const p=pipe[key(r)]||{},ids=new Set(Object.keys(p.quotes||{}));
+  for(const a of(r[15]||[])){const s=supByCage(a[0]);if(s)ids.add(s.id)}
+  return [...ids].map(id=>CRM.suppliers[id]).filter(Boolean);
+}
+function renderQuotes(r){
+  const k=key(r),el=$('#qList');if(!el)return;const p=pipe[k]||{},qs=p.quotes||{};
+  const missing=(r[15]||[]).filter(a=>!supByCage(a[0]));
+  el.innerHTML=candSups(r).map(s=>{const q=qs[s.id]||{};return `<div class="qrow" data-sid="${esc(s.id)}"><div class="top"><div><b>${esc(s.name||s.cage)}</b> <span class="small">${esc(s.cage||'')} ${esc(s.email||'no email')}</span>${q.requested?` <span class="tag t-ok">requested ${q.requested}</span>`:''}</div>
+    <div>${s.email?`<a class="btn p qMail" href="${mailto(s,[r])}">Draft RFQ email</a>`:`<button class="btn qEdit">Add email</button>`}</div></div>
+    <div class="qgrid"><input class="qP" type="number" step="0.01" placeholder="$/ea" value="${q.price??''}"><input class="qL" type="number" placeholder="Lead days" value="${q.lead??''}"><input class="qO" placeholder="Origin (e.g. USA)" value="${esc(q.origin||'')}"></div>
+    <div style="display:flex;gap:6px;margin-top:6px"><input class="qN" placeholder="Quote notes" value="${esc(q.notes||'')}" style="flex:1"><button class="btn qSave">Save quote</button>${q.price!=null?'<button class="btn qUse">Use</button>':''}</div></div>`}).join('')
+  +(missing.length?`<div class="small" style="margin-top:8px">Approved sources not in your suppliers yet: ${missing.map(a=>`<a href="#" class="qAddCage" data-c="${esc(a[0])}">+ ${esc(a[0])}</a>`).join(' ')}</div>`:'');
+  const sel=$('#qLink');sel.innerHTML='<option value="">Link a supplier…</option>'+sups().filter(s=>!candSups(r).includes(s)).map(s=>`<option value="${esc(s.id)}">${esc(s.name||s.cage)}</option>`).join('');
+  sel.onchange=()=>{if(!sel.value)return;const p2=pipe[k]||{status:'Sourcing',row:r};p2.row=r;p2.quotes=p2.quotes||{};p2.quotes[sel.value]=p2.quotes[sel.value]||{date:nowIso()};p2.saved=nowIso();pipe[k]=p2;crmSave();renderQuotes(r)};
+  $('#qNew').onclick=()=>supForm({},id=>{sel.innerHTML+=`<option value="${esc(id)}"></option>`;sel.value=id;sel.onchange()});
+  el.querySelectorAll('.qAddCage').forEach(a=>a.onclick=e=>{e.preventDefault();supForm({cage:a.dataset.c},()=>renderQuotes(r))});
+  el.querySelectorAll('.qrow').forEach(row=>{const sid=row.dataset.sid;
+    const m=row.querySelector('.qMail');if(m)m.addEventListener('click',()=>setTimeout(()=>{markRequested([r],sid);renderQuotes(r)},300));
+    const ed=row.querySelector('.qEdit');if(ed)ed.onclick=()=>supForm(CRM.suppliers[sid],()=>renderQuotes(r));
+    row.querySelector('.qSave').onclick=()=>{const p2=pipe[k]||{status:'Sourcing',row:r};p2.row=r;p2.quotes=p2.quotes||{};
+      const v=x=>row.querySelector(x).value;p2.quotes[sid]={...(p2.quotes[sid]||{}),price:v('.qP')===''?null:+v('.qP'),lead:v('.qL')===''?null:+v('.qL'),origin:v('.qO'),notes:v('.qN'),date:nowIso()};
+      if(!p2.status||p2.status==='Watching')p2.status='Sourcing';p2.saved=nowIso();pipe[k]=p2;crmSave();pipeCount();renderTable();renderQuotes(r)};
+    const u=row.querySelector('.qUse');if(u)u.onclick=()=>{const q=(pipe[k].quotes||{})[sid];$('#pv').value=CRM.suppliers[sid].name||CRM.suppliers[sid].cage;$('#pc').value=q.price;$('#pc').dispatchEvent(new Event('input'))};
+  });
+}
+$('#bulkMail').onclick=()=>{
+  const rows=[...SEL].map(k=>pipe[k]&&pipe[k].row).filter(Boolean);
+  if(!rows.length){modal('<div class="bar"><strong>Draft RFQ emails</strong><button class="btn" id="mX">✕</button></div><p class="small">Tick the RFQs you want quoted using the boxes on the left, then click this again.</p>');$('#mX').onclick=closeModal;return}
+  const by={};for(const r of rows)for(const s of candSups(r)){(by[s.id]=by[s.id]||{s,rows:[]}).rows.push(r)}
+  const list=Object.values(by);
+  modal(`<div class="bar"><strong>Draft RFQ emails (${rows.length} RFQs)</strong><button class="btn" id="mX">✕</button></div>
+  <p class="small">One email per supplier, listing every selected RFQ they can quote. Each opens as a draft in Thunderbird. Pick your purchasing@ address in the From box before sending.</p>
+  ${list.map(({s,rows:rs})=>`<div class="qrow"><div class="top"><div><b>${esc(s.name||s.cage)}</b> <span class="small">${esc(s.email||'no email')} · ${rs.length} item${rs.length>1?'s':''}</span></div>
+  ${s.email?`<a class="btn p bm" data-sid="${esc(s.id)}" href="${mailto(s,rs)}">Open draft</a>`:'<span class="small">Add an email in Suppliers</span>'}</div></div>`).join('')||'<p class="small">None of the selected RFQs have linked suppliers yet. Open an RFQ and add or link suppliers first.</p>'}`);
+  $('#mX').onclick=closeModal;
+  $('#modalBox').querySelectorAll('.bm').forEach(a=>a.addEventListener('click',()=>{const g=by[a.dataset.sid];setTimeout(()=>{markRequested(g.rows,g.s.id);a.textContent='Opened ✓'},300)}));
+};
+
+// ---------- settings ----------
+function cfgForm(){
+  modal(`<div class="bar"><strong>Settings</strong><button class="btn" id="mX">✕</button></div>
+  <label>Sync: private GitHub repo</label><input id="cRepo" placeholder="tier2rigging/bidpilot-data" value="${esc(CFG.repo)}">
+  <label>Sync: GitHub token</label><input id="cTok" type="password" placeholder="github_pat_…" value="${esc(CFG.token)}">
+  <div class="small">Fine-grained token with <b>Contents: Read and write</b> on that one repo only. It's stored in this browser only. Enter it once on each device.</div>
+  <label>Email signature (used in RFQ drafts)</label><textarea id="cSig" rows="5">${esc(CFG.sig)}</textarea>
+  <div style="display:flex;gap:6px;margin-top:10px"><button class="btn p" id="cSave">Save &amp; sync</button><button class="btn" id="cExp">Download backup</button></div>
+  <div class="small" id="cMsg" style="margin-top:6px">${esc($('#syncBadge').title||'')}</div>`);
+  $('#mX').onclick=closeModal;
+  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
+  $('#cExp').onclick=()=>{const b=new Blob([JSON.stringify(CRM,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-crm-${today}.json`;a.click()};
+}
+$('#cfgBtn').onclick=cfgForm;$('#syncBadge').onclick=cfgForm;
+$('#stPipe').onclick=()=>{$('#pipePane').classList.remove('hidden');$('#supPane').classList.add('hidden');$('#stPipe').classList.add('on');$('#stSup').classList.remove('on');renderPipe()};
+$('#stSup').onclick=()=>{$('#supPane').classList.remove('hidden');$('#pipePane').classList.add('hidden');$('#stSup').classList.add('on');$('#stPipe').classList.remove('on');renderSup()};
+$('#pipeCsv').onclick=()=>csv(Object.values(pipe).map(p=>{const r=p.row;const qs=Object.entries(p.quotes||{}).filter(([,q])=>q.price!=null).map(([id,q])=>`${(CRM.suppliers[id]||{}).name||id}: $${q.price}${q.lead?' / '+q.lead+'d':''}`).join('; ');return[p.status,r[8],r[0],fmtNsn(r[1]),r[4],r[5],p.vendor,p.cost,p.ship,p.bid,qs,p.notes]}),['Status','Return by','Solicitation','NSN','Item','Qty','Vendor','Vendor $/ea','Shipping','My bid $/ea','Quotes','Notes']);
+$('#tabFind').onclick=()=>{$('#findView').classList.remove('hidden');$('#pipeView').classList.add('hidden');$('#tabFind').classList.add('on');$('#tabPipe').classList.remove('on')};
+$('#tabPipe').onclick=()=>{$('#pipeView').classList.remove('hidden');$('#findView').classList.add('hidden');$('#tabPipe').classList.add('on');$('#tabFind').classList.remove('on');renderPipe();renderSup()};
+
+chips(); pipeCount(); run(); syncBadge('Local only'); if(CFG.repo&&CFG.token) sync();
 </script>
 </body>
 </html>
