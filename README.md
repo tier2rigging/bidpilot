@@ -61,3 +61,13 @@ In an RFQ's drawer, under **Suppliers & quotes**: add approved-source CAGEs as s
 3. In **Manage → Bid pipeline**, tick the RFQs and click **Export DIBBS batch file**. Anything missing is listed per RFQ. Download the file and upload it on DIBBS under Batch Quote Upload, then review each quote on DIBBS before submitting.
 
 Not exported (quote these on DIBBS directly): foreign-origin items, hazmat items, and QPL items.
+
+## Orders, wins and losses
+
+- Awards to CAGE **175A8** go to `data/my-awards.js` and appear in **Manage → Orders** automatically, with the delivery due date read from the award PDF. To track more CAGEs, add a repo variable or secret `MY_CAGES` (comma-separated) and pass it to the awards step.
+- Pipeline RFQs flip to **Won** when an award to your CAGE matches their purchase request number. RFQs you marked **Bid** flip to **Lost** when the award for that PR goes to someone else. Open the RFQ to see who won and at what price.
+- Orders track status, due date, supplier, supplier PO and cost, ship date, tracking, invoice/WAWF, and paid date. Orders due within 10 days and not yet shipped are flagged, with a reminder to file a PAR in time.
+
+## Opened RFQs
+
+Opening an RFQ marks it as viewed. In the list, opened RFQs are grayed out and new ones have a blue dot. Tick **Hide RFQs I've opened** to see only new ones. **Mark as not opened** in the drawer resets it. Viewed marks sync with the CRM, and marks for closed RFQs are cleared automatically.

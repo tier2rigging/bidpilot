@@ -32,6 +32,8 @@ input,select,textarea{width:100%;padding:7px 9px;border:1px solid var(--line);bo
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 th{font-size:11px;text-transform:uppercase;color:var(--mute);cursor:pointer;user-select:none;position:sticky;top:0;background:var(--card)}
 tbody tr{cursor:pointer}tbody tr:hover{background:var(--bg)}
+#tb tr.seen td{color:var(--mute)}#tb tr.seen td:first-child{box-shadow:inset 3px 0 0 transparent}#tb tr.new td:first-child{box-shadow:inset 3px 0 0 #2f6fed}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#2f6fed;margin-right:6px;vertical-align:middle}
 td.nom{white-space:normal;min-width:160px}
 .tw{overflow:auto;max-height:calc(100vh - 190px)}
 .tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700}
@@ -91,6 +93,7 @@ td.nom{white-space:normal;min-width:160px}
       <select id="asf"><option value="">Any</option><option value="none">None listed (anyone can supply)</option><option value="has">Has approved sources</option></select>
       <label>Approved-source CAGE(s)</label>
       <input id="cage" placeholder="e.g. 1A2B3, 0PMV4">
+      <label style="display:flex;gap:6px;align-items:center;text-transform:none;font-size:13px;font-weight:600;color:var(--ink);margin-top:12px"><input type="checkbox" id="hideSeen" style="width:auto"> Hide RFQs I've opened</label>
       <label>Award history</label>
       <select id="hist"><option value="">Any</option><option value="has">Has award history</option><option value="nosame">Hide same winner (last 3)</option><option value="noaswon">Hide where approved source won last</option></select>
       <div class="row2">
@@ -130,12 +133,21 @@ td.nom{white-space:normal;min-width:160px}
 
 <main id="pipeView" class="hidden" style="grid-template-columns:1fr">
   <section class="card">
-    <div class="subtabs"><button class="btn on" id="stPipe">Bid pipeline</button><button class="btn" id="stSup">Suppliers</button></div>
+    <div class="subtabs"><button class="btn on" id="stPipe">Bid pipeline</button><button class="btn" id="stSup">Suppliers</button><button class="btn" id="stOrd">Orders <span id="ordBadge"></span></button></div>
     <div id="pipePane">
     <div class="bar"><strong>Bid pipeline</strong><span><button class="btn p" id="bulkMail">Draft RFQ emails for selected</button> <button class="btn p" id="bqExport">Export DIBBS batch file</button> <button class="btn" id="pipeCsv">Export CSV</button></span></div>
     <div class="tw"><table>
       <thead><tr><th><input type="checkbox" id="selAll" style="width:auto"></th><th>Status</th><th>Return by</th><th>Solicitation</th><th>NSN</th><th>Item</th><th>Qty</th><th>Quotes</th><th>Vendor</th><th>Vendor $/ea</th><th>My bid $/ea</th><th>Margin</th></tr></thead>
       <tbody id="pb"></tbody>
+    </table></div>
+    </div>
+    <div id="ordPane" class="hidden">
+    <div class="bar"><strong>Orders</strong><span><button class="btn" id="ordAdd">+ Add order manually</button> <button class="btn" id="ordCsv">Export CSV</button></span></div>
+    <div class="small" id="ordNote" style="margin-bottom:8px"></div>
+    <label style="display:inline-flex;gap:6px;align-items:center;text-transform:none;font-size:13px;font-weight:400;color:var(--ink)"><input type="checkbox" id="ordDone" style="width:auto"> Show paid and cancelled</label>
+    <div class="tw"><table>
+      <thead><tr><th>Status</th><th>Due</th><th>Awarded</th><th>Contract / order</th><th>NSN</th><th>Item</th><th>Qty</th><th>$/ea</th><th>Total</th><th>Supplier</th><th>Supplier PO</th><th>Shipped</th></tr></thead>
+      <tbody id="ob"></tbody>
     </table></div>
     </div>
     <div id="supPane" class="hidden">
@@ -156,6 +168,7 @@ td.nom{white-space:normal;min-width:160px}
 <script src="data/fsc.js"></script>
 <script src="data/rfqs.js"></script>
 <script src="data/award-summary.js"></script>
+<script src="data/my-awards.js"></script>
 <script>
 const D = window.RFQ_DATA || {rows:[]}, FSC = window.FSC_NAMES || {}, AS_SUM=(window.AWARD_SUMMARY||{}).n||{};
 const AWC={}; window.AW_LOAD=(f,rows)=>{AWC[f]=rows};
@@ -190,18 +203,19 @@ const openAmsc=a=>!a||a==='G'||a==='Z';
 const CFG=Object.assign({repo:'',token:'',sig:'Tier2 Rigging LLC\nCAGE: 175A8\nManorville, NY\n516-902-8843\ntier2rigging.com',mtarget:20,qp:{cage:'175A8',sb:'',aac:'',pccr:'',adr:'',pkg:'',haz:'',mat:'',disc:'1',mfg:'DD',quality:'',fobCity:'Manorville',fobState:'NY',fobCountry:'US'}},store.get('bp_cfg',{}));
 CFG.qp=Object.assign({cage:'175A8',disc:'1',mfg:'DD',fobCity:'Manorville',fobState:'NY',fobCountry:'US'},CFG.qp||{});
 let CRM=store.get('bp_crm',null)||{pipeline:store.get('t2_pipe',{}),suppliers:{},deleted:{}};
-CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.deleted=CRM.deleted||{};
+CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.orders=CRM.orders||{};CRM.viewed=CRM.viewed||{};CRM.deleted=CRM.deleted||{};
 let pipe=CRM.pipeline;
 const nowIso=()=>new Date().toISOString();
 function canon(o){return JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v)}
 function mergeCRM(a,b){
-  const out={pipeline:{},suppliers:{},deleted:{...(a.deleted||{})}};
+  const out={pipeline:{},suppliers:{},orders:{},viewed:{},deleted:{...(a.deleted||{})}};
   for(const[k,t]of Object.entries(b.deleted||{}))if(!out.deleted[k]||t>out.deleted[k])out.deleted[k]=t;
-  for(const col of['pipeline','suppliers']){
-    const A=a[col]||{},B=b[col]||{},pre=col==='pipeline'?'p:':'s:';
+  for(const col of['pipeline','suppliers','orders','viewed']){
+    const A=a[col]||{},B=b[col]||{},pre=col==='pipeline'?'p:':col==='orders'?'o:':col==='viewed'?'v:':'s:';
     for(const id of new Set([...Object.keys(A),...Object.keys(B)])){
       const x=A[id],y=B[id];let w=!x?y:!y?x:((y.saved||'')>(x.saved||'')?y:x);
       if(col==='pipeline'&&x&&y&&w){const q={...(x.quotes||{})};for(const[s,v]of Object.entries(y.quotes||{}))if(!q[s]||(v.date||'')>(q[s].date||''))q[s]=v;w={...w,quotes:q}}
+      if(col==='viewed'&&typeof D!=='undefined'&&D.rows&&!openSet().has(id))continue;
       const del=out.deleted[pre+id];if(w&&!(del&&del>=(w.saved||'')))out[col][id]=w;
     }
   }
@@ -218,13 +232,13 @@ async function sync(){
   syncing=true;syncBadge('Syncing…');
   try{
     for(let i=0;i<3;i++){
-      let remote={pipeline:{},suppliers:{},deleted:{}},sha;
+      let remote={pipeline:{},suppliers:{},orders:{},viewed:{},deleted:{}},sha;
       const g=await gh('GET');
       if(g.status===200){const j=await g.json();sha=j.sha;remote=JSON.parse(b64d(j.content||'')||'{}')}
       else if(g.status!==404)throw new Error(g.status===401?'bad token':g.status===404?'repo not found':'GitHub '+g.status);
       const merged=mergeCRM(remote,CRM);
       CRM=merged;pipe=CRM.pipeline;store.set('bp_crm',CRM);
-      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},deleted:remote.deleted||{}}))break;
+      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},orders:remote.orders||{},viewed:remote.viewed||{},deleted:remote.deleted||{}}))break;
       const p=await gh('PUT',{message:'BidPilot CRM update',content:b64e(JSON.stringify(merged,null,1)),...(sha?{sha}:{})});
       if(p.status===409||p.status===422)continue;
       if(!p.ok)throw new Error(p.status===403||p.status===404?'token needs Contents read/write on this repo':'GitHub '+p.status);
@@ -236,7 +250,14 @@ async function sync(){
 }
 function crmSave(){CRM.pipeline=pipe;store.set('bp_crm',CRM);scheduleSync()}
 function delPipe(k){delete pipe[k];CRM.deleted['p:'+k]=nowIso();crmSave()}
-function refreshViews(){pipeCount();renderTable();if(!$('#pipeView').classList.contains('hidden')){renderPipe();renderSup()}}
+// Viewed RFQs: keyed by solicitation + PR, value {saved}. Only open RFQs are kept.
+const vkey=r=>`${r[0]}:${r[2]}`;
+let _open=null;const openSet=()=>_open||(_open=new Set(D.rows.map(vkey)));
+const seen=r=>!!CRM.viewed[vkey(r)];
+function markSeen(r,on=true){const k=vkey(r);if(on){if(CRM.viewed[k])return;CRM.viewed[k]={saved:nowIso()};delete CRM.deleted['v:'+k]}else{delete CRM.viewed[k];CRM.deleted['v:'+k]=nowIso()}
+  CRM.pipeline=pipe;store.set('bp_crm',CRM);scheduleSync()}
+function pruneSeen(){const open=new Set(D.rows.map(vkey));for(const k of Object.keys(CRM.viewed))if(!open.has(k))delete CRM.viewed[k]}
+function refreshViews(){pipeCount();renderTable();ordBadge();if(!$('#pipeView').classList.contains('hidden')){renderPipe();renderSup();renderOrd()}}
 
 let fscSel=new Set(store.get('t2_fscSel',[])), sortK=8, sortDir=1, page=0, PER=100, filtered=[];
 
@@ -258,11 +279,12 @@ $('#saveMine').onclick=()=>{store.set('t2_myfsc',[...fscSel]);alert(`Saved ${fsc
 $('#loadMine').onclick=()=>{fscSel=new Set(store.get('t2_myfsc',[]));chips();run()};
 
 function filt(skipFsc){
-  const fobF=$('#fobF').value, inspF=$('#inspF').value, hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, sa=$('#sa').value, am=$('#amsc').value, ty=$('#type').value;
+  const hideSeen=$('#hideSeen').checked, fobF=$('#fobF').value, inspF=$('#inspF').value, hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, sa=$('#sa').value, am=$('#amsc').value, ty=$('#type').value;
   const cl=+$('#close').value||0, ml=+$('#minleft').value||0, qmin=+$('#qmin').value||0, qmax=+$('#qmax').value||0;
   return D.rows.filter(r=>{
     const as=r[15]||[];
     if(q && !(`${r[0]} ${r[1]} ${r[4]} ${r[2]} ${as.map(a=>a.join(' ')).join(' ')}`.toLowerCase().replace(/-/g,'').includes(q)))return false;
+    if(hideSeen && seen(r))return false;
     if(fobF && r[12]!==fobF)return false;
     if(inspF && r[16]!==inspF)return false;
     const sm=sumOf(r);
@@ -296,8 +318,8 @@ function run(){
 function badge(r){const p=pipe[key(r)];return p?`<span class="tag t-acc">${p.status}</span>`:''}
 function renderTable(){
   const rows=filtered.slice(page*PER,(page+1)*PER);
-  $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]);return `<tr data-i="${page*PER+i}">
-    <td>${r[8]||''} <span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span></td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
+  $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]),sn=seen(r);return `<tr data-i="${page*PER+i}" class="${sn?'seen':'new'}" title="${sn?'Opened '+esc(new Date(CRM.viewed[vkey(r)].saved).toLocaleDateString()):'Not opened yet'}">
+    <td>${sn?'':'<span class="dot"></span>'}${r[8]||''} <span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span></td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
     <td class="nom">${esc(r[4])}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
     <td>${SA[r[9]]||r[9]}</td><td>${r[10]?`<span class="tag ${openAmsc(r[10])?'t-ok':'t-warn'}" title="${esc(AMSC[r[10]]||'')}">${r[10]}</span>`:''}</td>
     <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=sumOf(r);if(!m)return '';return `${m[0]>0?'$'+m[0].toFixed(2):''}${m[4]?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="14" class="small">No RFQs match.</td></tr>`;
@@ -308,8 +330,8 @@ function renderFscList(){
   $('#fscList').innerHTML=Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,150).map(([f,n])=>`<div data-f="${f}"><span>${f} ${esc((FSC[f]||'').slice(0,30))}</span><b>${n}</b></div>`).join('')||'<div class="small">None</div>';
 }
 $('#fscList').onclick=e=>{const d=e.target.closest('[data-f]');if(d){fscSel.add(d.dataset.f);chips();run()}};
-['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
-$('#reset').onclick=()=>{['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();chips();run()};
+['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#hideSeen','#fobF','#inspF','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
+$('#reset').onclick=()=>{['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();$('#hideSeen').checked=false;chips();run()};
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=+th.dataset.k;sortDir=sortK===k?-sortDir:1;sortK=k;run()});
 $('#prev').onclick=()=>{if(page>0){page--;renderTable()}};
 $('#next').onclick=()=>{if((page+1)*PER<filtered.length){page++;renderTable()}};
@@ -322,8 +344,9 @@ $('#csv').onclick=()=>csv(filtered.map(r=>[r[8],r[0],fmtNsn(r[1]),r[4],r[3],FSC[
 let DR_PTW=null;
 function openDrawer(r){
   const k=key(r), p=pipe[k]||{};
+  if(!seen(r)){markSeen(r);renderTable()}
   const dr=$('#drawer');
-  dr.innerHTML=`<div class="bar"><strong>${r[0]}</strong><button class="btn" id="dclose">Close ✕</button></div>
+  dr.innerHTML=`<div class="bar"><strong>${r[0]}</strong><span><button class="btn" id="dunseen" title="Show it as new again in the list">Mark as not opened</button> <button class="btn" id="dclose">Close ✕</button></span></div>
   <h2 style="margin:4px 0 10px;font-size:18px">${esc(r[4])}</h2>
   <div class="links">
     <a class="btn p" target="_blank" rel="noopener" href="${pdf(r)}">RFQ PDF</a>
@@ -356,6 +379,8 @@ function openDrawer(r){
   <div style="display:flex;gap:6px;margin-top:8px"><select id="qLink" style="flex:1"><option value="">Link a supplier…</option></select><button class="btn" id="qNew">+ New supplier</button></div>
   <label>Pipeline status</label>
   <div class="status">${STAT.map(s=>`<button class="btn ${p.status===s?'on':''}" data-s="${s}">${s}</button>`).join('')}${p.status?'<button class="btn" data-s="">Remove</button>':''}</div>
+  ${p.lostTo?`<div class="verdict v-no">Lost to CAGE ${esc(p.lostTo.cage)} on ${esc(p.lostTo.date)}${p.lostTo.unit?` at $${(+p.lostTo.unit).toFixed(2)}/ea`:''}${p.bid?` (you bid $${(+p.bid).toFixed(2)})`:''}.</div>`:''}
+  ${p.won?`<div class="verdict v-go">Won: ${esc(p.won.order||p.won.contract)} on ${esc(p.won.date)}. Track delivery in Manage → Orders.</div>`:''}
   <div class="calc">
   <strong style="font-size:14px">Bid calculator</strong> <span class="small">Qty ${r[5]??1} ${r[6]||''} · FOB ${r[12]==='D'?'Destination: you pay freight to DLA':r[12]==='O'?'Origin: DLA arranges freight':'unknown'}</span>
   <div class="row2"><div><label>Supplier</label><input id="pv" value="${esc(p.vendor||'')}"></div><div><label>Supplier $/ea</label><input id="pc" class="cin" type="number" step="0.01" value="${p.cost??''}"></div></div>
@@ -385,6 +410,7 @@ function openDrawer(r){
   <div id="aw" class="small" style="margin-top:8px">Loading…</div>`;
   dr.classList.add('open');
   $("#dclose").onclick=()=>dr.classList.remove('open');
+  $('#dunseen').onclick=()=>{markSeen(r,false);renderTable();dr.classList.remove('open')};
   const q=r[5]||1, $v=id=>$(id).value===''?null:+$(id).value;
   const $s=id=>$(id)?$(id).value.trim():'';
   const form=()=>({bqDays:$v('#bqDays'),bqOffer:$s('#bqOffer'),bqMfr:$s('#bqMfr').toUpperCase(),bqEnd:$s('#bqEnd'),bqInsp:$s('#bqInsp').toUpperCase(),cost:$v('#pc'),ship:$v('#ps'),pack:$v('#pk'),labor:$v('#pl'),freight:$v('#pf'),other:$v('#po'),mtarget:$v('#pm'),bid:$v('#pb2')});
@@ -560,6 +586,70 @@ $('#bulkMail').onclick=()=>{
   $('#modalBox').querySelectorAll('.bm').forEach(a=>a.addEventListener('click',()=>{const g=by[a.dataset.sid];setTimeout(()=>{markRequested(g.rows,g.s.id);a.textContent='Opened ✓'},300)}));
 };
 
+// ---------- orders (won awards) ----------
+const MY=window.MY_AWARDS||{rows:[],cages:['175A8']};
+const OSTAT=['Awarded','PO sent to supplier','Received from supplier','Shipped to DLA','Invoiced (WAWF)','Paid','Cancelled'];
+const ordId=a=>`${a[0]}|${a[1]||''}`;
+function allOrders(){
+  const out={};
+  for(const a of MY.rows||[]){const id=ordId(a);out[id]={id,auto:true,contract:a[0],order:a[1],awardDate:a[6],nsn:a[8],nom:a[9],pr:a[10],qty:a[13],ui:a[14],unit:a[15]>0?a[15]:null,total:a[5],pdf:a[12],mod:a[3],due:a[16]||'',cnt:a[2],status:'Awarded',...(CRM.orders[id]||{})}}
+  for(const[id,o]of Object.entries(CRM.orders))if(!out[id])out[id]={id,status:'Awarded',...o};
+  return Object.values(out);
+}
+const ordOpen=o=>!['Paid','Cancelled'].includes(o.status);
+const shippedOrLater=o=>['Shipped to DLA','Invoiced (WAWF)','Paid'].includes(o.status);
+function dueTag(o){if(!o.due)return '<span class="small">set due date</span>';const d=daysLeft(o.due);if(shippedOrLater(o))return o.due;return `${o.due} <span class="tag ${d<0?'t-acc':d<=10?'t-warn':'t-ok'}">${d<0?Math.abs(d)+'d late':d+'d'}</span>`}
+function ordBadge(){const n=allOrders().filter(o=>ordOpen(o)&&!shippedOrLater(o)&&o.due&&daysLeft(o.due)<=10).length;$('#ordBadge').innerHTML=n?`<span class="tag t-warn">${n} due soon</span>`:''}
+function renderOrd(){
+  const show=$('#ordDone').checked,list=allOrders().filter(o=>show||ordOpen(o)).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'));
+  $('#ordNote').textContent=`Awards to CAGE ${(MY.cages||[]).join(', ')} are added here automatically from the daily award collection${MY.updated?' (last checked '+new Date(MY.updated).toLocaleDateString()+')':''}. Due dates come from the award PDF. Check each one against the contract.`;
+  $('#ob').innerHTML=list.map(o=>`<tr data-id="${esc(o.id)}"><td><span class="tag t-acc">${esc(o.status)}</span>${o.mod?` <span class="tag t-warn" title="Mod posted ${esc(o.mod)}">MOD</span>`:''}</td><td>${dueTag(o)}</td><td>${esc(o.awardDate||'')}</td>
+    <td>${o.pdf?`<a target="_blank" rel="noopener" href="${esc(o.pdf)}">${esc(o.order||o.contract)}</a>`:esc(o.order||o.contract||'')}</td><td>${fmtNsn(o.nsn||'')}</td><td class="nom">${esc(o.nom||'')}</td><td>${o.qty??''} ${esc(o.ui||'')}</td><td>${o.unit!=null?'$'+(+o.unit).toFixed(2):''}</td><td>${o.total!=null?'$'+(+o.total).toLocaleString(undefined,{minimumFractionDigits:2}):''}</td>
+    <td>${esc(o.supplier||'')}</td><td>${esc(o.po||'')}</td><td>${esc(o.shipDate||'')}</td></tr>`).join('')||'<tr><td colspan="12" class="small">No orders yet. When DLA awards one to your CAGE, it shows up here automatically.</td></tr>';
+  ordBadge();
+}
+$('#ordDone').onchange=renderOrd;
+$('#ob').onclick=e=>{if(e.target.closest('a'))return;const tr=e.target.closest('tr[data-id]');if(tr)ordForm(allOrders().find(o=>o.id===tr.dataset.id))};
+$('#ordAdd').onclick=()=>ordForm({id:'m'+Date.now().toString(36),status:'Awarded',manual:true});
+$('#ordCsv').onclick=()=>csv(allOrders().map(o=>[o.status,o.due,o.awardDate,o.contract,o.order,fmtNsn(o.nsn||''),o.nom,o.qty,o.unit,o.total,o.supplier,o.po,o.supCost,o.shipDate,o.tracking,o.invoice,o.paidDate,o.notes]),['Status','Due','Awarded','Contract','Order','NSN','Item','Qty','Unit $','Total $','Supplier','Supplier PO','Supplier cost $','Shipped','Tracking','Invoice/WAWF','Paid','Notes']);
+function ordForm(o){
+  const f=(id,l,v,t='text')=>`<div><label>${l}</label><input id="${id}" type="${t}" value="${esc(v??'')}"></div>`;
+  const d=o.due?daysLeft(o.due):null,warn=o.due&&!shippedOrLater(o)&&ordOpen(o)&&d<=10;
+  modal(`<div class="bar"><strong>${esc(o.order||o.contract||'New order')}</strong><button class="btn" id="mX">✕</button></div>
+  ${o.nom?`<div class="small">${esc(o.nom)} · NSN ${fmtNsn(o.nsn||'')} · Qty ${o.qty??''} ${esc(o.ui||'')}</div>`:''}
+  ${warn?`<div class="verdict ${d<0?'v-no':'v-chk'}">${d<0?`${Math.abs(d)} days past due.`:`Due in ${d} days.`} If you won't make it, file a <b>Post Award Request (PAR)</b> on DIBBS (Awards → Post Award Request) before the due date. Late deliveries can get the order cancelled and hurt your past performance.</div>`:''}
+  ${o.mod?`<div class="verdict v-chk">A modification was posted on ${esc(o.mod)}. Read it: <a target="_blank" rel="noopener" href="${DIBBS}/Awards/AwdRec.aspx?contract=${encodeURIComponent(o.contract)}&dlv=${encodeURIComponent(o.order||'')}&cnt=${encodeURIComponent(o.cnt||'')}">award package</a>.</div>`:''}
+  <label>Status</label><select id="oSt">${OSTAT.map(x=>`<option ${o.status===x?'selected':''}>${x}</option>`).join('')}</select>
+  ${o.auto?'':`<div class="row2">${f('oCon','Contract #',o.contract)}${f('oOrd','Delivery order #',o.order)}</div><div class="row2">${f('oNsn','NSN',o.nsn)}${f('oNom','Item',o.nom)}</div><div class="row3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">${f('oQty','Qty',o.qty,'number')}${f('oUnit','Unit $',o.unit,'number')}${f('oAw','Award date',o.awardDate,'date')}</div>`}
+  <div class="row2">${f('oDue','Delivery due date',o.due,'date')}${f('oSup','Supplier',o.supplier)}</div>
+  <div class="row2">${f('oPo','Supplier PO #',o.po)}${f('oSc','Supplier cost $ total',o.supCost,'number')}</div>
+  <div class="row2">${f('oShip','Shipped to DLA (date)',o.shipDate,'date')}${f('oTrk','Tracking #',o.tracking)}</div>
+  <div class="row2">${f('oInv','Invoice / WAWF #',o.invoice)}${f('oPaid','Paid (date)',o.paidDate,'date')}</div>
+  <label>Notes</label><textarea id="oNotes" rows="3">${esc(o.notes||'')}</textarea>
+  ${o.total&&o.supCost?`<div class="small" style="margin-top:6px">Gross profit: $${(o.total-o.supCost).toFixed(2)} (${((o.total-o.supCost)/o.total*100).toFixed(1)}%)</div>`:''}
+  <div style="display:flex;justify-content:space-between;margin-top:10px"><button class="btn p" id="oSave">Save</button>${o.manual||(!o.auto&&CRM.orders[o.id])?'<button class="btn" id="oDel">Delete</button>':''}</div>`);
+  $('#mX').onclick=closeModal;
+  const v=id=>$(id)?$(id).value.trim():undefined,nv=id=>{const x=v(id);return x===''||x===undefined?null:+x};
+  $('#oSave').onclick=()=>{
+    const rec={...(CRM.orders[o.id]||{}),status:v('#oSt'),due:v('#oDue'),supplier:v('#oSup'),po:v('#oPo'),supCost:nv('#oSc'),shipDate:v('#oShip'),tracking:v('#oTrk'),invoice:v('#oInv'),paidDate:v('#oPaid'),notes:$('#oNotes').value,saved:nowIso()};
+    if(!o.auto)Object.assign(rec,{manual:true,contract:v('#oCon'),order:v('#oOrd'),nsn:(v('#oNsn')||'').replace(/-/g,''),nom:v('#oNom'),qty:nv('#oQty'),unit:nv('#oUnit'),awardDate:v('#oAw'),total:nv('#oQty')!=null&&nv('#oUnit')!=null?nv('#oQty')*nv('#oUnit'):null});
+    CRM.orders[o.id]=rec;crmSave();closeModal();renderOrd();
+  };
+  if($('#oDel'))$('#oDel').onclick=()=>{delete CRM.orders[o.id];CRM.deleted['o:'+o.id]=nowIso();crmSave();closeModal();renderOrd()};
+}
+// Auto Won / Lost: match pipeline RFQs to collected awards by purchase request number.
+async function autoOutcomes(){
+  let changed=false;const myPr=new Map((MY.rows||[]).map(a=>[a[10],a]));
+  const bids=Object.entries(pipe).filter(([,p])=>p.row&&p.status!=='Won'&&p.status!=='Pass');
+  for(const[k,p]of bids){const a=myPr.get(p.row[2]);if(a){p.status='Won';p.won={contract:a[0],order:a[1],date:a[6]};p.saved=nowIso();changed=true}}
+  for(const[k,p]of bids.filter(([,p])=>p.status==='Bid')){
+    const f=/^\d{13}$/.test(p.row[1])?p.row[1].slice(0,4):'other';
+    const hit=(await loadAwards(f)).find(a=>a[10]===p.row[2]&&!(MY.cages||[]).includes(String(a[4]).toUpperCase()));
+    if(hit){p.status='Lost';p.lostTo={cage:hit[4],unit:hit[15]>0?hit[15]:null,total:hit[5],date:hit[6]};p.saved=nowIso();changed=true}
+  }
+  if(changed){crmSave();refreshViews()}
+}
+
 // ---------- DIBBS batch quote export ----------
 const BQC={};window.BQ_LOAD=(sh,obj)=>{BQC[sh]=obj};
 function loadBq(sh){return new Promise(res=>{if(BQC[sh])return res(BQC[sh]);const sc=document.createElement('script');sc.src=`data/bq/${sh}.js`;sc.onload=()=>res(BQC[sh]||{});sc.onerror=()=>res({});document.head.appendChild(sc)})}
@@ -641,13 +731,15 @@ function cfgForm(){
   $('#cExp').onclick=()=>{const b=new Blob([JSON.stringify(CRM,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-crm-${today}.json`;a.click()};
 }
 $('#cfgBtn').onclick=cfgForm;$('#syncBadge').onclick=cfgForm;
-$('#stPipe').onclick=()=>{$('#pipePane').classList.remove('hidden');$('#supPane').classList.add('hidden');$('#stPipe').classList.add('on');$('#stSup').classList.remove('on');renderPipe()};
-$('#stSup').onclick=()=>{$('#supPane').classList.remove('hidden');$('#pipePane').classList.add('hidden');$('#stSup').classList.add('on');$('#stPipe').classList.remove('on');renderSup()};
+function subtab(which){for(const[t,pn]of[['stPipe','pipePane'],['stSup','supPane'],['stOrd','ordPane']]){$('#'+pn).classList.toggle('hidden',t!==which);$('#'+t).classList.toggle('on',t===which)}if(which==='stPipe')renderPipe();if(which==='stSup')renderSup();if(which==='stOrd')renderOrd()}
+$('#stOrd').onclick=()=>subtab('stOrd');
+$('#stPipe').onclick=()=>subtab('stPipe');
+$('#stSup').onclick=()=>subtab('stSup');
 $('#pipeCsv').onclick=()=>csv(Object.values(pipe).map(p=>{const r=p.row;const qs=Object.entries(p.quotes||{}).filter(([,q])=>q.price!=null).map(([id,q])=>`${(CRM.suppliers[id]||{}).name||id}: $${q.price}${q.lead?' / '+q.lead+'d':''}`).join('; ');const bm=bidMath(p,r[5]||1);return[p.status,r[8],r[0],fmtNsn(r[1]),r[4],r[5],p.vendor,p.cost,p.ship,p.pack,p.labor,p.freight,p.other,bm.cost.toFixed(2),p.bid,p.bid?bm.margin.toFixed(1):'',qs,p.notes]}),['Status','Return by','Solicitation','NSN','Item','Qty','Supplier','Supplier $/ea','Inbound ship','Packaging','Labor','Outbound freight','Other','Total cost','My bid $/ea','Margin %','Quotes','Notes']);
 $('#tabFind').onclick=()=>{$('#findView').classList.remove('hidden');$('#pipeView').classList.add('hidden');$('#tabFind').classList.add('on');$('#tabPipe').classList.remove('on')};
-$('#tabPipe').onclick=()=>{$('#pipeView').classList.remove('hidden');$('#findView').classList.add('hidden');$('#tabPipe').classList.add('on');$('#tabFind').classList.remove('on');renderPipe();renderSup()};
+$('#tabPipe').onclick=()=>{$('#pipeView').classList.remove('hidden');$('#findView').classList.add('hidden');$('#tabPipe').classList.add('on');$('#tabFind').classList.remove('on');renderPipe();renderSup();renderOrd()};
 
-chips(); pipeCount(); run(); syncBadge('Local only'); if(CFG.repo&&CFG.token) sync();
+pruneSeen(); chips(); pipeCount(); run(); syncBadge('Local only'); ordBadge(); (CFG.repo&&CFG.token?sync():Promise.resolve()).then(autoOutcomes);
 </script>
 </body>
 </html>
