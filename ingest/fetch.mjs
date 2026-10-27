@@ -145,7 +145,7 @@ export function parseBatch(text) {
     const g = (n) => (f[n - 1] ?? '').trim();
     const key = `${g(1)}:${g(46)}`;
     if (!g(1) || m.has(key)) continue;
-    m.set(key, { type: g(2) || 'M', fob: g(32), days: g(51) ? parseInt(g(51), 10) : null });
+    m.set(key, { type: g(2) || 'M', fob: g(32), insp: g(36), days: g(51) ? parseInt(g(51), 10) : null });
   }
   return m;
 }
@@ -184,8 +184,8 @@ export function parseAS(text) {
 
 // ---------- storage ----------
 // Row array order (kept short to keep the file small):
-// 0 sol, 1 nsn, 2 pr, 3 fsc, 4 nom, 5 qty, 6 unit, 7 issue, 8 ret, 9 setAside, 10 amsc, 11 type, 12 fob, 13 days, 14 file, 15 approved sources [[cage,pn],...]
-const toRow = (r) => [r.sol, r.nsn, r.pr, r.fsc, r.nom, r.qty, r.unit, r.issue, r.ret, r.sa, r.amsc, r.type || '', r.fob || '', r.days ?? null, r.file || '', r.as || []];
+// 0 sol, 1 nsn, 2 pr, 3 fsc, 4 nom, 5 qty, 6 unit, 7 issue, 8 ret, 9 setAside, 10 amsc, 11 type, 12 fob, 13 days, 14 file, 15 approved sources [[cage,pn],...], 16 inspection/acceptance point
+const toRow = (r) => [r.sol, r.nsn, r.pr, r.fsc, r.nom, r.qty, r.unit, r.issue, r.ret, r.sa, r.amsc, r.type || '', r.fob || '', r.days ?? null, r.file || '', r.as || [], r.insp || ''];
 
 function loadExisting() {
   try {
@@ -200,7 +200,8 @@ const yymmddToIso = (s) => `20${s.slice(0, 2)}-${s.slice(2, 4)}-${s.slice(4, 6)}
 async function main() {
   const db = loadExisting();
   const byKey = new Map(db.rows.map((r) => [`${r[0]}:${r[2]}:${r[1]}`, r]));
-  const done = new Set(db.imported || []);
+  // v2 adds inspection point (col 36): re-import all listed days once.
+  const done = new Set(db.v >= 2 ? db.imported || [] : []);
 
   const list = await get(`${DIBBS}/RFQ/RFQDates.aspx?category=recent`);
   const days = new Map();
@@ -237,7 +238,7 @@ async function main() {
   const rows = [...byKey.values()].filter((r) => !r[8] || r[8] >= today);
   rows.sort((a, b) => (a[8] || '').localeCompare(b[8] || ''));
   const keep = [...done].sort().slice(-60);
-  const out = { updated: new Date().toISOString(), imported: keep, rows };
+  const out = { v: 2, updated: new Date().toISOString(), imported: keep, rows };
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, 'window.RFQ_DATA=' + JSON.stringify(out) + ';\n');
   log(`wrote ${rows.length} open RFQ lines to ${OUT}`);
