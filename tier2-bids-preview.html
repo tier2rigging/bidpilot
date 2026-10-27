@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BidPilot</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23c8102e'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 20h16M7 20v-5M11 20v-8M15 20v-11'/%3E%3C/g%3E%3Ccircle cx='19' cy='5' r='1.8' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#16191f;--mute:#667085;--line:#e3e6eb;--acc:#c8102e;--acc2:#fde8eb;--ok:#127a3d;--okb:#e3f5ea;--warn:#a15c00;--warnb:#fff3df}
+@media (prefers-color-scheme:dark){:root{--bg:#111318;--card:#1a1d24;--ink:#e8eaee;--mute:#98a1b0;--line:#2b2f38;--acc:#ff4d61;--acc2:#3a1d22;--ok:#4cc382;--okb:#16301f;--warnb:#33270f;--warn:#f2b354}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;align-items:center;gap:16px;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;letter-spacing:.5px}header h1 b{color:var(--acc)}.brand{display:flex;align-items:center;gap:10px}.logo{width:34px;height:34px;border-radius:9px;background:#16224f;display:flex;align-items:center;justify-content:center}.tag{font-size:11px;color:var(--mute)}
+.meta{color:var(--mute);font-size:12px}
+nav{display:flex;gap:4px;margin-left:auto}nav button{border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600}
+nav button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+main{display:grid;grid-template-columns:280px 1fr;gap:16px;padding:16px;max-width:1600px;margin:0 auto}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mute);margin:10px 0 4px}
+input,select,textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.chip{background:var(--acc2);color:var(--acc);border-radius:12px;padding:2px 8px;font-size:12px;font-weight:600;cursor:pointer}
+.chip:hover{text-decoration:line-through}
+.btn{border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:6px 10px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600}
+.btn.p{background:var(--acc);color:#fff;border-color:var(--acc)}
+.small{font-size:12px;color:var(--mute)}
+.fsclist{max-height:340px;overflow:auto;margin-top:6px}
+.fsclist div{display:flex;justify-content:space-between;gap:6px;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:12.5px}
+.fsclist div:hover{background:var(--bg)}.fsclist b{color:var(--acc)}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;text-transform:uppercase;color:var(--mute);cursor:pointer;user-select:none;position:sticky;top:0;background:var(--card)}
+tbody tr{cursor:pointer}tbody tr:hover{background:var(--bg)}
+td.nom{white-space:normal;min-width:160px}
+.tw{overflow:auto;max-height:calc(100vh - 190px)}
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700}
+.t-ok{background:var(--okb);color:var(--ok)}.t-warn{background:var(--warnb);color:var(--warn)}.t-acc{background:var(--acc2);color:var(--acc)}
+.bar{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
+#drawer{position:fixed;top:0;right:0;width:min(560px,100%);height:100%;background:var(--card);border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(0,0,0,.15);transform:translateX(105%);transition:transform .2s;z-index:10;overflow:auto;padding:16px}
+#drawer.open{transform:none}
+.links a{display:inline-block;margin:0 6px 6px 0}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:4px 10px;font-size:13px}.kv div:nth-child(odd){color:var(--mute)}
+.status button{margin:0 4px 4px 0}.status button.on{background:var(--ink);color:var(--card)}
+.aw td{font-size:12.5px;padding:5px 6px}
+.hidden{display:none}
+#modalBg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+#modalBg.hidden{display:none}
+#modalBox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(560px,100%)}
+.sync{font-size:12px;padding:3px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--line);cursor:pointer}
+.sync.ok{color:var(--ok);background:var(--okb)}.sync.err{color:var(--acc);background:var(--acc2)}
+.subtabs{display:flex;gap:6px;margin-bottom:10px}.subtabs button.on{background:var(--ink);color:var(--card)}
+.qrow{border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:8px}
+.qrow .top{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.qgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px}.qgrid input{padding:5px 7px}
+.pager{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin-top:8px}
+.banner{background:var(--warnb);color:var(--warn);padding:8px 12px;border-radius:8px;margin-bottom:10px;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div><h1>BID<b>PILOT</b></h1><div class="tag">Government Contracting Intelligence</div></div></div>
+  <span class="meta" id="meta"></span>
+  <span class="sync" id="syncBadge" title="Sync settings">Local only</span><button class="btn" id="cfgBtn" title="Settings">⚙ Settings</button>
+  <nav><button id="tabFind" class="on" title="Find and filter solicitations">Discover</button><button id="tabPipe" title="Bids, suppliers, and orders">Manage <span id="pipeCount"></span></button></nav>
+</header>
+
+<main id="findView">
+  <aside>
+    <div class="card">
+      <label>Search</label>
+      <input id="q" placeholder="NSN, solicitation, item name…">
+      <label>Add FSC (any of all 666)</label>
+      <input id="fscIn" list="fscOpts" placeholder="Type code or name, e.g. 1670 or parachute">
+      <datalist id="fscOpts"></datalist>
+      <div class="chips" id="fscChips"></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn" id="saveMine">Save as My FSCs</button>
+        <button class="btn" id="loadMine">Load My FSCs</button>
+      </div>
+      <label>Group (FSG)</label>
+      <select id="fsg"><option value="">All groups</option></select>
+      <label>Set-aside</label>
+      <select id="sa"><option value="">Any</option><option value="N">Unrestricted</option><option value="Y">Small Business</option><option value="L">WOSB</option><option value="E">EDWOSB</option><option value="H">HUBZone</option><option value="R">SDVOSB</option><option value="A">8(a)</option></select>
+      <label>Tech data / sources (AMSC)</label>
+      <select id="amsc"><option value="">Any</option><option value="open">Open competition (G, Z, blank)</option><option value="restricted">Approved-source / restricted</option></select>
+      <label>Approved sources</label>
+      <select id="asf"><option value="">Any</option><option value="none">None listed (anyone can supply)</option><option value="has">Has approved sources</option></select>
+      <label>Approved-source CAGE(s)</label>
+      <input id="cage" placeholder="e.g. 1A2B3, 0PMV4">
+      <label>Award history</label>
+      <select id="hist"><option value="">Any</option><option value="has">Has award history</option><option value="nosame">Hide same winner (last 3)</option><option value="noaswon">Hide where approved source won last</option></select>
+      <label>RFQ type</label>
+      <select id="type"><option value="">Any</option><option value="F">Fast award</option><option value="P">Auto-evaluation</option><option value="M">Manual</option><option value="I">AIDC</option></select>
+      <div class="row2">
+        <div><label>Closes within</label><select id="close"><option value="">Any</option><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option></select></div>
+        <div><label>Min days left</label><select id="minleft"><option value="0">0</option><option value="2">2</option><option value="5">5</option><option value="10">10</option></select></div>
+      </div>
+      <div class="row2">
+        <div><label>Qty min</label><input id="qmin" type="number" min="0"></div>
+        <div><label>Qty max</label><input id="qmax" type="number" min="0"></div>
+      </div>
+      <div style="margin-top:10px"><button class="btn" id="reset">Reset filters</button></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <label style="margin-top:0">Open RFQs by FSC</label>
+      <div class="small">Click to filter. Counts reflect your other filters.</div>
+      <div class="fsclist" id="fscList"></div>
+    </div>
+  </aside>
+  <section class="card">
+    <div id="sampleBanner" class="banner hidden">Showing sample data (Oct 21 DIBBS day). Live data appears after the first daily update runs. Approved sources are only filled in on the few sample rows that match the Oct 25 batch file.</div>
+    <div class="bar"><strong id="count"></strong><span><button class="btn" id="csv">Export CSV</button></span></div>
+    <div class="tw"><table>
+      <thead><tr>
+        <th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC</th><th data-k="15">Sources</th><th data-k="16">Last $/ea</th><th data-k="11">Type</th><th>Status</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table></div>
+    <div class="pager"><button class="btn" id="prev">‹ Prev</button><span id="pg" class="small"></span><button class="btn" id="next">Next ›</button></div>
+  </section>
+</main>
+
+<main id="pipeView" class="hidden" style="grid-template-columns:1fr">
+  <section class="card">
+    <div class="subtabs"><button class="btn on" id="stPipe">Bid pipeline</button><button class="btn" id="stSup">Suppliers</button></div>
+    <div id="pipePane">
+    <div class="bar"><strong>Bid pipeline</strong><span><button class="btn p" id="bulkMail">Draft RFQ emails for selected</button> <button class="btn" id="pipeCsv">Export CSV</button></span></div>
+    <div class="tw"><table>
+      <thead><tr><th><input type="checkbox" id="selAll" style="width:auto"></th><th>Status</th><th>Return by</th><th>Solicitation</th><th>NSN</th><th>Item</th><th>Qty</th><th>Quotes</th><th>Vendor</th><th>Vendor $/ea</th><th>My bid $/ea</th><th>Margin</th></tr></thead>
+      <tbody id="pb"></tbody>
+    </table></div>
+    </div>
+    <div id="supPane" class="hidden">
+    <div class="bar"><strong>Suppliers</strong><span><button class="btn p" id="supAdd">+ Add supplier</button> <button class="btn" id="supCsv">Export CSV</button></span></div>
+    <input id="supQ" placeholder="Search suppliers, CAGE, email…" style="margin-bottom:8px">
+    <div class="tw"><table>
+      <thead><tr><th>Name</th><th>CAGE</th><th>Contact</th><th>Email</th><th>Phone</th><th>Open RFQs</th><th>Quotes</th><th>Notes</th></tr></thead>
+      <tbody id="sb"></tbody>
+    </table></div>
+    </div>
+    <p class="small" id="syncNote"></p>
+  </section>
+</main>
+
+<div id="drawer"></div>
+<div id="modalBg" class="hidden"><div id="modalBox"></div></div>
+
+<script src="data/fsc.js"></script>
+<script src="data/rfqs.js"></script>
+<script src="data/award-summary.js"></script>
+<script>
+const D = window.RFQ_DATA || {rows:[]}, FSC = window.FSC_NAMES || {}, AS_SUM=(window.AWARD_SUMMARY||{}).n||{};
+const AWC={}; window.AW_LOAD=(f,rows)=>{AWC[f]=rows};
+function loadAwards(f){return new Promise(res=>{if(AWC[f])return res(AWC[f]);const sc=document.createElement('script');sc.src=`data/awards/${f}.js`;sc.onload=()=>res(AWC[f]||[]);sc.onerror=()=>res([]);document.head.appendChild(sc)})}
+const sumOf=r=>AS_SUM[r[1]];
+const asWonLast=r=>{const x=sumOf(r);return !!(x&&(r[15]||[]).some(a=>a[0]===x[1]))};
+const FILES='https://dibbs2.bsm.dla.mil', DIBBS='https://www.dibbs.bsm.dla.mil';
+const FSG={10:'Weapons',11:'Nuclear ordnance',12:'Fire control',13:'Ammunition & explosives',14:'Guided missiles',15:'Aircraft & airframe',16:'Aircraft components',17:'Aircraft launch/ground handling',18:'Space vehicles',19:'Ships & small craft',20:'Ship & marine equipment',22:'Railway equipment',23:'Ground vehicles',24:'Tractors',25:'Vehicle components',26:'Tires & tubes',28:'Engines & turbines',29:'Engine accessories',30:'Power transmission',31:'Bearings',32:'Woodworking machinery',34:'Metalworking machinery',35:'Service & trade equipment',36:'Special industry machinery',37:'Agricultural machinery',38:'Construction & mining',39:'Materials handling',40:'Rope, cable, chain & fittings',41:'Refrigeration & A/C',42:'Fire fighting, rescue & safety',43:'Pumps & compressors',44:'Furnace & drying equipment',45:'Plumbing & heating',46:'Water purification',47:'Pipe, hose & fittings',48:'Valves',49:'Shop equipment',51:'Hand tools',52:'Measuring tools',53:'Hardware & abrasives',54:'Prefab structures',55:'Lumber & plywood',56:'Construction materials',58:'Communication & radar',59:'Electrical & electronic components',60:'Fiber optics',61:'Electric wire & power',62:'Lighting',63:'Alarm & security',65:'Medical & dental',66:'Instruments & lab',67:'Photographic',68:'Chemicals',69:'Training aids',70:'IT equipment',71:'Furniture',72:'Furnishings',73:'Food prep & serving',74:'Office machines',75:'Office supplies',76:'Books & maps',77:'Musical & radios',78:'Recreational & athletic',79:'Cleaning supplies',80:'Brushes, paints & adhesives',81:'Containers & packaging',83:'Textiles, leather & tents',84:'Clothing & individual equipment',85:'Toiletries',87:'Agricultural supplies',88:'Live animals',89:'Subsistence',91:'Fuels & lubricants',93:'Nonmetallic fabricated materials',94:'Nonmetallic crude materials',95:'Metal bars & sheets',96:'Ores & minerals',99:'Miscellaneous'};
+const SA={N:'Unrestricted',Y:'Small Bus.',L:'WOSB',E:'EDWOSB',H:'HUBZone',R:'SDVOSB',A:'8(a)'};
+const TYPE={F:'Fast award',P:'Auto-eval',I:'AIDC',M:'Manual','':''};
+const AMSC={G:'Full data, open competition',Z:'Commercial item',A:'Data not available',B:'Source-controlled',C:'Engineering source approval required',D:'Data not available',H:'Data not available, qualification',K:'No data rights',L:'Data incomplete',P:'Data in process',Q:'Qualified products list',R:'Data rights not owned',T:'Data inadequate',V:'Data available, not competitive'};
+const STAT=['Watching','Sourcing','Bid','Won','Lost','Pass'];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
+const daysLeft=d=>d?Math.round((new Date(d+'T12:00:00')-new Date(today+'T12:00:00'))/864e5):null;
+const fmtNsn=n=>/^\d{13}$/.test(n)?`${n.slice(0,4)}-${n.slice(4,6)}-${n.slice(6,9)}-${n.slice(9)}`:n;
+const key=r=>`${r[0]}:${r[2]}:${r[1]}`;
+const pdf=r=>`${FILES}/Downloads/RFQ/${r[0].slice(-1)}/${(r[14]||r[0]+'.pdf').toUpperCase()}`;
+const openAmsc=a=>!a||a==='G'||a==='Z';
+
+// ---------- CRM data + GitHub sync ----------
+const CFG=Object.assign({repo:'',token:'',sig:'Tier2 Rigging LLC\nCAGE: 175A8\nManorville, NY\n516-902-8843\ntier2rigging.com'},store.get('bp_cfg',{}));
+let CRM=store.get('bp_crm',null)||{pipeline:store.get('t2_pipe',{}),suppliers:{},deleted:{}};
+CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.deleted=CRM.deleted||{};
+let pipe=CRM.pipeline;
+const nowIso=()=>new Date().toISOString();
+function canon(o){return JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v)}
+function mergeCRM(a,b){
+  const out={pipeline:{},suppliers:{},deleted:{...(a.deleted||{})}};
+  for(const[k,t]of Object.entries(b.deleted||{}))if(!out.deleted[k]||t>out.deleted[k])out.deleted[k]=t;
+  for(const col of['pipeline','suppliers']){
+    const A=a[col]||{},B=b[col]||{},pre=col==='pipeline'?'p:':'s:';
+    for(const id of new Set([...Object.keys(A),...Object.keys(B)])){
+      const x=A[id],y=B[id];let w=!x?y:!y?x:((y.saved||'')>(x.saved||'')?y:x);
+      if(col==='pipeline'&&x&&y&&w){const q={...(x.quotes||{})};for(const[s,v]of Object.entries(y.quotes||{}))if(!q[s]||(v.date||'')>(q[s].date||''))q[s]=v;w={...w,quotes:q}}
+      const del=out.deleted[pre+id];if(w&&!(del&&del>=(w.saved||'')))out[col][id]=w;
+    }
+  }
+  return out;
+}
+const b64e=s=>btoa(unescape(encodeURIComponent(s))), b64d=s=>decodeURIComponent(escape(atob(s.replace(/\s/g,''))));
+function syncBadge(t,cls){const b=$('#syncBadge');b.textContent=t;b.className='sync '+(cls||'');const n=$('#syncNote');if(n)n.textContent=CFG.repo&&CFG.token?`Synced to private repo ${CFG.repo} (crm.json). Works on any device where you enter the same repo and token in Settings.`:'Saved in this browser only. Add a private repo in ⚙ Settings to sync across devices.'}
+async function gh(method,body){return fetch(`https://api.github.com/repos/${CFG.repo}/contents/crm.json`,{method,cache:'no-store',headers:{Authorization:'Bearer '+CFG.token,Accept:'application/vnd.github+json',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined})}
+let syncT=null,syncing=false;
+function scheduleSync(){if(!CFG.repo||!CFG.token){syncBadge('Local only');return}clearTimeout(syncT);syncBadge('Saving…');syncT=setTimeout(sync,1200)}
+async function sync(){
+  if(!CFG.repo||!CFG.token){syncBadge('Local only');return}
+  if(syncing){scheduleSync();return}
+  syncing=true;syncBadge('Syncing…');
+  try{
+    for(let i=0;i<3;i++){
+      let remote={pipeline:{},suppliers:{},deleted:{}},sha;
+      const g=await gh('GET');
+      if(g.status===200){const j=await g.json();sha=j.sha;remote=JSON.parse(b64d(j.content||'')||'{}')}
+      else if(g.status!==404)throw new Error(g.status===401?'bad token':g.status===404?'repo not found':'GitHub '+g.status);
+      const merged=mergeCRM(remote,CRM);
+      CRM=merged;pipe=CRM.pipeline;store.set('bp_crm',CRM);
+      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},deleted:remote.deleted||{}}))break;
+      const p=await gh('PUT',{message:'BidPilot CRM update',content:b64e(JSON.stringify(merged,null,1)),...(sha?{sha}:{})});
+      if(p.status===409||p.status===422)continue;
+      if(!p.ok)throw new Error(p.status===403||p.status===404?'token needs Contents read/write on this repo':'GitHub '+p.status);
+      break;
+    }
+    syncBadge('Synced ✓','ok');refreshViews();
+  }catch(e){syncBadge('Sync error','err');$('#syncBadge').title=e.message}
+  finally{syncing=false}
+}
+function crmSave(){CRM.pipeline=pipe;store.set('bp_crm',CRM);scheduleSync()}
+function delPipe(k){delete pipe[k];CRM.deleted['p:'+k]=nowIso();crmSave()}
+function refreshViews(){pipeCount();renderTable();if(!$('#pipeView').classList.contains('hidden')){renderPipe();renderSup()}}
+
+let fscSel=new Set(store.get('t2_fscSel',[])), sortK=8, sortDir=1, page=0, PER=100, filtered=[];
+
+// meta
+$('#meta').textContent=`${D.rows.length.toLocaleString()} open RFQ lines · updated ${D.updated?new Date(D.updated).toLocaleString():'—'}`;
+if(D.sample)$('#sampleBanner').classList.remove('hidden');
+// FSC options
+$('#fscOpts').innerHTML=Object.entries(FSC).map(([c,n])=>`<option value="${c} — ${esc(n)}">`).join('');
+$('#fsg').innerHTML+=Object.entries(FSG).map(([c,n])=>`<option value="${c}">${c} ${esc(n)}</option>`).join('');
+
+function chips(){ $('#fscChips').innerHTML=[...fscSel].map(c=>`<span class="chip" data-c="${c}" title="Remove">${c} ${esc((FSC[c]||'').slice(0,22))} ×</span>`).join(''); store.set('t2_fscSel',[...fscSel]); }
+$('#fscChips').onclick=e=>{const c=e.target.dataset.c;if(c){fscSel.delete(c);chips();run()}};
+$('#fscIn').addEventListener('change',e=>{
+  const v=e.target.value.trim(); let code=(v.match(/^\d{4}/)||[])[0];
+  if(!code){const hit=Object.entries(FSC).find(([c,n])=>n.toLowerCase().includes(v.toLowerCase()));code=hit&&hit[0]}
+  if(code){fscSel.add(code);chips();run()} e.target.value='';
+});
+$('#saveMine').onclick=()=>{store.set('t2_myfsc',[...fscSel]);alert(`Saved ${fscSel.size} FSCs as My FSCs`)};
+$('#loadMine').onclick=()=>{fscSel=new Set(store.get('t2_myfsc',[]));chips();run()};
+
+function filt(skipFsc){
+  const hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, sa=$('#sa').value, am=$('#amsc').value, ty=$('#type').value;
+  const cl=+$('#close').value||0, ml=+$('#minleft').value||0, qmin=+$('#qmin').value||0, qmax=+$('#qmax').value||0;
+  return D.rows.filter(r=>{
+    const as=r[15]||[];
+    if(q && !(`${r[0]} ${r[1]} ${r[4]} ${r[2]} ${as.map(a=>a.join(' ')).join(' ')}`.toLowerCase().replace(/-/g,'').includes(q)))return false;
+    const sm=sumOf(r);
+    if(hist==='has'&&!sm)return false;
+    if(hist==='nosame'&&sm&&sm[4])return false;
+    if(hist==='noaswon'&&asWonLast(r))return false;
+    if(asf==='none'&&as.length)return false;
+    if(asf==='has'&&!as.length)return false;
+    if(cages.length&&!as.some(a=>cages.includes(a[0])))return false;
+    if(!skipFsc && fscSel.size && !fscSel.has(r[3]))return false;
+    if(fsg && (r[3]||'').slice(0,2)!==fsg)return false;
+    if(sa && r[9]!==sa)return false;
+    if(am==='open'&&!openAmsc(r[10]))return false;
+    if(am==='restricted'&&openAmsc(r[10]))return false;
+    if(ty && (r[11]||'M')!==ty)return false;
+    const dl=daysLeft(r[8]);
+    if(cl && dl!==null && dl>cl)return false;
+    if(ml && dl!==null && dl<ml)return false;
+    if(qmin && (r[5]||0)<qmin)return false;
+    if(qmax && (r[5]||0)>qmax)return false;
+    return true;
+  });
+}
+function run(){
+  filtered=filt(false);
+  filtered.sort((a,b)=>{let x=a[sortK],y=b[sortK];if(sortK===15){x=(x||[]).length;y=(y||[]).length}if(sortK===16){x=(sumOf(a)||[])[0]||0;y=(sumOf(b)||[])[0]||0}return (typeof x==='number'||typeof y==='number'?(x||0)-(y||0):String(x||'').localeCompare(String(y||'')))*sortDir});
+  page=Math.min(page,Math.max(0,Math.ceil(filtered.length/PER)-1));
+  $('#count').textContent=`${filtered.length.toLocaleString()} RFQ lines`;
+  renderTable(); renderFscList();
+}
+function badge(r){const p=pipe[key(r)];return p?`<span class="tag t-acc">${p.status}</span>`:''}
+function renderTable(){
+  const rows=filtered.slice(page*PER,(page+1)*PER);
+  $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]);return `<tr data-i="${page*PER+i}">
+    <td>${r[8]||''} <span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span></td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
+    <td class="nom">${esc(r[4])}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
+    <td>${SA[r[9]]||r[9]}</td><td>${r[10]?`<span class="tag ${openAmsc(r[10])?'t-ok':'t-warn'}" title="${esc(AMSC[r[10]]||'')}">${r[10]}</span>`:''}</td>
+    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=sumOf(r);if(!m)return '';return `${m[0]>0?'$'+m[0].toFixed(2):''}${m[4]?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="12" class="small">No RFQs match.</td></tr>`;
+  const pages=Math.max(1,Math.ceil(filtered.length/PER));$('#pg').textContent=`Page ${page+1} of ${pages}`;
+}
+function renderFscList(){
+  const c={};for(const r of filt(true))if(r[3])c[r[3]]=(c[r[3]]||0)+1;
+  $('#fscList').innerHTML=Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,150).map(([f,n])=>`<div data-f="${f}"><span>${f} ${esc((FSC[f]||'').slice(0,30))}</span><b>${n}</b></div>`).join('')||'<div class="small">None</div>';
+}
+$('#fscList').onclick=e=>{const d=e.target.closest('[data-f]');if(d){fscSel.add(d.dataset.f);chips();run()}};
+['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
+$('#reset').onclick=()=>{['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();chips();run()};
+document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=+th.dataset.k;sortDir=sortK===k?-sortDir:1;sortK=k;run()});
+$('#prev').onclick=()=>{if(page>0){page--;renderTable()}};
+$('#next').onclick=()=>{if((page+1)*PER<filtered.length){page++;renderTable()}};
+$('#tb').onclick=e=>{const tr=e.target.closest('tr[data-i]');if(tr)openDrawer(filtered[+tr.dataset.i])};
+
+function csv(rows,head){const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;const b=new Blob([[head,...rows].map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-${today}.csv`;a.click()}
+$('#csv').onclick=()=>csv(filtered.map(r=>[r[8],r[0],fmtNsn(r[1]),r[4],r[3],FSC[r[3]]||'',r[5],r[6],SA[r[9]]||r[9],r[10],TYPE[r[11]]||r[11],r[13],r[2],(r[15]||[]).map(a=>a[0]+' '+a[1]).join('; '),pdf(r)]),['Return by','Solicitation','NSN','Item','FSC','FSC name','Qty','Unit','Set-aside','AMSC','Type','Delivery days','PR','Approved sources (CAGE PN)','RFQ PDF']);
+
+// ---------- drawer ----------
+function openDrawer(r){
+  const k=key(r), p=pipe[k]||{};
+  const dr=$('#drawer');
+  dr.innerHTML=`<div class="bar"><strong>${r[0]}</strong><button class="btn" id="dclose">Close ✕</button></div>
+  <h2 style="margin:4px 0 10px;font-size:18px">${esc(r[4])}</h2>
+  <div class="links">
+    <a class="btn p" target="_blank" rel="noopener" href="${pdf(r)}">RFQ PDF</a>
+    <a class="btn" target="_blank" rel="noopener" href="${DIBBS}/rfq/rfqrec.aspx?sn=${r[0]}">Solicitation page</a>
+    ${/^\d{13}$/.test(r[1])?`<a class="btn" target="_blank" rel="noopener" href="${DIBBS}/RFQ/RFQNsn.aspx?value=${r[1]}&category=issue&Scope=">NSN history on DIBBS</a>`:''}
+    <a class="btn" target="_blank" rel="noopener" href="${DIBBS}/RA/Quote/QuoteFrm.aspx?sn=${r[0]}">Quote form</a>
+  </div>
+  <div class="kv" style="margin:10px 0">
+    <div>NSN</div><div>${fmtNsn(r[1])}</div>
+    <div>FSC</div><div>${r[3]} ${esc(FSC[r[3]]||'')}</div>
+    <div>Qty</div><div>${r[5]??''} ${r[6]||''}</div>
+    <div>Return by</div><div>${r[8]} (${daysLeft(r[8])} days)</div>
+    <div>Posted</div><div>${r[7]||''}</div>
+    <div>Set-aside</div><div>${SA[r[9]]||r[9]}</div>
+    <div>AMSC</div><div>${r[10]?`${r[10]}: ${esc(AMSC[r[10]]||'')}`:'—'}</div>
+    <div>RFQ type</div><div>${TYPE[r[11]]||'—'}</div>
+    <div>FOB</div><div>${r[12]==='O'?'Origin':r[12]==='D'?'Destination':'—'}</div>
+    <div>Delivery days</div><div>${r[13]??'—'}</div>
+    <div>PR</div><div>${r[2]||''}</div>
+  </div>
+  <h3 style="font-size:15px;margin:14px 0 4px">Approved sources</h3>
+  ${(r[15]||[]).length?`<div class="small">DLA will only accept these exact parts. As a reseller, buy from the CAGE or an authorized distributor and keep traceability.</div>
+  <table class="aw"><tbody>${r[15].map(([c,pn])=>`<tr><td><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(c)}&page=1">${esc(c)}</a></td><td>${esc(pn)}</td><td><a target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent('"'+pn+'"')}">Find distributors</a></td></tr>`).join('')}</tbody></table>`
+  :'<div class="small">None listed. Check the RFQ PDF for spec or drawing requirements before quoting.</div>'}
+  <h3 style="font-size:15px;margin:14px 0 4px">Suppliers &amp; quotes</h3>
+  <div class="small">Draft an RFQ email (opens in Thunderbird), then log the quote you get back. "Use" copies it into the bid calculator.</div>
+  <div id="qList"></div>
+  <div style="display:flex;gap:6px;margin-top:8px"><select id="qLink" style="flex:1"><option value="">Link a supplier…</option></select><button class="btn" id="qNew">+ New supplier</button></div>
+  <label>Pipeline status</label>
+  <div class="status">${STAT.map(s=>`<button class="btn ${p.status===s?'on':''}" data-s="${s}">${s}</button>`).join('')}${p.status?'<button class="btn" data-s="">Remove</button>':''}</div>
+  <div class="row2"><div><label>Vendor</label><input id="pv" value="${esc(p.vendor||'')}"></div><div><label>Vendor $/ea</label><input id="pc" type="number" step="0.01" value="${p.cost??''}"></div></div>
+  <div class="row2"><div><label>Shipping $ total</label><input id="ps" type="number" step="0.01" value="${p.ship??''}"></div><div><label>My bid $/ea</label><input id="pb2" type="number" step="0.01" value="${p.bid??''}"></div></div>
+  <div style="margin-top:6px"><button class="btn" id="lastAw">Bid = last award +3%/yr</button> <span class="small" id="lastAwNote"></span></div>
+  <div class="small" id="margin" style="margin-top:6px"></div>
+  <label>Notes</label><textarea id="pn" rows="3">${esc(p.notes||'')}</textarea>
+  <div style="margin-top:8px"><button class="btn p" id="psave">Save</button></div>
+  <h3 style="font-size:15px;margin:18px 0 4px">Award history — this NSN</h3>
+  <div class="small">Collected daily from DIBBS awards and kept permanently. Cancelled ($0) and modified awards are flagged.</div>
+  <div id="nsnAw" class="small" style="margin-top:8px">Loading…</div>
+  <h3 style="font-size:15px;margin:18px 0 4px">DLA award history — FSC ${r[3]}</h3>
+  <div class="small">Last 2 years of DLA contract awards in this FSC from USAspending.gov. Shows who wins in this category and typical award sizes.</div>
+  <div id="aw" class="small" style="margin-top:8px">Loading…</div>`;
+  dr.classList.add('open');
+  $("#dclose").onclick=()=>dr.classList.remove('open');
+  const mcalc=()=>{const c=+$('#pc').value,s=+$('#ps').value||0,b=+$('#pb2').value,q=r[5]||1;
+    if(c&&b){const cost=c*q+s,rev=b*q;$('#margin').textContent=`Cost $${cost.toFixed(2)} · Revenue $${rev.toFixed(2)} · Margin $${(rev-cost).toFixed(2)} (${((rev-cost)/rev*100).toFixed(1)}%)`}else $('#margin').textContent=''};
+  ['#pc','#ps','#pb2'].forEach(s=>$(s).oninput=mcalc);mcalc();
+  const save=status=>{
+    const cur={...(pipe[k]||{}),status:status??((pipe[k]||{}).status||'Watching'),vendor:$('#pv').value,cost:$('#pc').value===''?null:+$('#pc').value,ship:$('#ps').value===''?null:+$('#ps').value,bid:$('#pb2').value===''?null:+$('#pb2').value,notes:$('#pn').value,row:r,saved:new Date().toISOString()};
+    if(status==='')delPipe(k);else{pipe[k]=cur;crmSave()} pipeCount(); renderTable(); openDrawer(r);
+  };
+  dr.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>save(b.dataset.s));
+  $('#psave').onclick=()=>save();
+  renderQuotes(r);
+  awards(r[3]);
+  nsnAwards(r);
+}
+async function nsnAwards(r){
+  const el=$('#nsnAw'), f=/^\d{13}$/.test(r[1])?r[1].slice(0,4):'other';
+  const list=(await loadAwards(f)).filter(a=>a[8]===r[1]).sort((a,b)=>(b[6]||'').localeCompare(a[6]||''));
+  const asC=new Set((r[15]||[]).map(a=>a[0]));
+  const priced=list.find(a=>a[15]>0&&a[5]!==0);
+  const btn=$('#lastAw');
+  if(priced){const yrs=(new Date(today)-new Date(priced[6]))/3.156e10, bid=priced[15]*Math.pow(1.03,Math.max(0,yrs));
+    $('#lastAwNote').textContent=`Last $${priced[15].toFixed(2)} on ${priced[6]}`;
+    btn.onclick=()=>{$('#pb2').value=bid.toFixed(2);$('#pb2').dispatchEvent(new Event('input'))}}
+  else{btn.disabled=true;$('#lastAwNote').textContent='No priced award collected yet'}
+  if(!list.length){el.textContent='No awards collected for this NSN yet. History builds from the first daily run onward.';return}
+  const pkg=a=>a[1]?`${DIBBS}/Awards/AwdRec.aspx?contract=${a[0]}&dlv=${a[1]}&cnt=${a[2]}`:'';
+  el.innerHTML=`<table class="aw"><tbody><tr><td><b>Date</b></td><td><b>CAGE</b></td><td><b>Qty</b></td><td><b>$/ea</b></td><td><b>Total</b></td><td><b>Award</b></td></tr>${list.map(a=>`<tr>
+    <td>${a[6]}</td><td><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${a[4]}&page=1">${a[4]}</a>${asC.has(a[4])?' <span class="tag t-acc">AS</span>':''}</td>
+    <td>${a[13]??''} ${a[14]||''}</td><td>${a[15]>0?'$'+a[15].toFixed(2):''}</td>
+    <td>${a[5]===0?'<span class="tag t-warn">$0 cancelled?</span>':'$'+(a[5]??0).toLocaleString(undefined,{minimumFractionDigits:2})}</td>
+    <td><a target="_blank" rel="noopener" href="${a[12]}">${a[1]||a[0]}</a>${a[3]?` <span class="tag t-warn" title="Last mod posted ${a[3]}">MOD ${a[3]}</span>`:''}${pkg(a)?` · <a target="_blank" rel="noopener" href="${pkg(a)}">package</a>`:''}</td></tr>`).join('')}</tbody></table>`;
+}
+async function awards(fsc){
+  const el=$('#aw'); if(!fsc){el.textContent='No FSC (part-number item).';return}
+  const end=today, start=new Date(Date.now()-730*864e5).toISOString().slice(0,10);
+  const body={filters:{award_type_codes:['A','B','C','D'],psc_codes:[fsc],time_period:[{start_date:start,end_date:end}],agencies:[{type:'awarding',tier:'subtier',name:'Defense Logistics Agency'}]},
+    fields:['Award ID','Recipient Name','Award Amount','Start Date','Description'],sort:'Start Date',order:'desc',limit:100,page:1};
+  try{
+    const res=await fetch('https://api.usaspending.gov/api/v2/search/spending_by_award/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const j=await res.json(), rs=j.results||[];
+    if(!rs.length){el.innerHTML='No DLA awards found in this FSC in the last 2 years.';return}
+    const by={};for(const a of rs){const n=a['Recipient Name']||'?';by[n]=by[n]||{n:0,amt:0};by[n].n++;by[n].amt+=a['Award Amount']||0}
+    const top=Object.entries(by).sort((a,b)=>b[1].n-a[1].n).slice(0,8);
+    const amts=rs.map(a=>a['Award Amount']||0).sort((a,b)=>a-b), med=amts[Math.floor(amts.length/2)];
+    el.innerHTML=`<div class="kv"><div>Awards (latest ${rs.length})</div><div>${rs.length}${j.hasNext?'+':''}</div><div>Distinct winners</div><div>${Object.keys(by).length}</div><div>Median award</div><div>$${Math.round(med).toLocaleString()}</div></div>
+    <label>Top winners</label><table class="aw"><tbody>${top.map(([n,v])=>`<tr><td>${esc(n)}</td><td>${v.n} awards</td><td>$${Math.round(v.amt).toLocaleString()}</td></tr>`).join('')}</tbody></table>
+    <label>Most recent</label><table class="aw"><tbody>${rs.slice(0,10).map(a=>`<tr><td>${a['Start Date']||''}</td><td style="white-space:normal">${esc(a['Recipient Name'])}<br><span class="small">${esc((a['Description']||'').slice(0,70))}</span></td><td>$${Math.round(a['Award Amount']||0).toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
+  }catch(e){el.innerHTML=`Couldn't load award history (${esc(e.message)}). <a target="_blank" rel="noopener" href="https://www.usaspending.gov/search">Search USAspending</a> for PSC ${fsc}.`}
+}
+
+// ---------- pipeline ----------
+function pipeCount(){const n=Object.keys(pipe).length;$('#pipeCount').textContent=n?`(${n})`:''}
+const SEL=new Set();
+function renderPipe(){
+  const items=Object.values(pipe).sort((a,b)=>(a.row[8]||'').localeCompare(b.row[8]||''));
+  $('#pb').innerHTML=items.map(p=>{const r=p.row,k=key(r),q=r[5]||1,m=p.cost&&p.bid?((p.bid*q-(p.cost*q+(p.ship||0)))/(p.bid*q)*100).toFixed(1)+'%':'';
+    const qs=Object.values(p.quotes||{}),got=qs.filter(x=>x.price!=null).length;
+    return `<tr data-k="${k}"><td><input type="checkbox" class="sel" data-k="${k}" ${SEL.has(k)?'checked':''} style="width:auto"></td><td><span class="tag t-acc">${p.status}</span></td><td>${r[8]} <span class="small">${daysLeft(r[8])}d</span></td><td>${r[0]}</td><td>${fmtNsn(r[1])}</td><td class="nom">${esc(r[4])}</td><td>${r[5]??''}</td><td>${qs.length?`${got}/${qs.length}`:''}</td><td>${esc(p.vendor||'')}</td><td>${p.cost??''}</td><td>${p.bid??''}</td><td>${m}</td></tr>`}).join('')||'<tr><td colspan="12" class="small">Nothing tracked yet. Open an RFQ and set a status.</td></tr>';
+}
+$('#pb').onclick=e=>{if(e.target.classList.contains('sel')){const k=e.target.dataset.k;e.target.checked?SEL.add(k):SEL.delete(k);return}const tr=e.target.closest('tr[data-k]');if(tr)openDrawer(pipe[tr.dataset.k].row)};
+$('#selAll').onclick=e=>{SEL.clear();if(e.target.checked)Object.keys(pipe).forEach(k=>SEL.add(k));renderPipe()};
+
+// ---------- suppliers ----------
+let CAGE_OPEN=null;
+function cageOpen(){if(!CAGE_OPEN){CAGE_OPEN={};for(const r of D.rows)for(const a of(r[15]||[]))CAGE_OPEN[a[0]]=(CAGE_OPEN[a[0]]||0)+1}return CAGE_OPEN}
+const sups=()=>Object.values(CRM.suppliers).sort((a,b)=>(a.name||a.cage||'').localeCompare(b.name||b.cage||''));
+const supByCage=c=>Object.values(CRM.suppliers).find(s=>s.cage&&s.cage.toUpperCase()===String(c).toUpperCase());
+function quoteCount(id){let n=0;for(const p of Object.values(pipe))if(p.quotes&&p.quotes[id]&&p.quotes[id].price!=null)n++;return n}
+function renderSup(){
+  const q=($('#supQ').value||'').toLowerCase(),co=cageOpen();
+  const list=sups().filter(s=>!q||[s.name,s.cage,s.email,s.contact,s.notes].join(' ').toLowerCase().includes(q));
+  $('#sb').innerHTML=list.map(s=>`<tr data-id="${esc(s.id)}"><td>${esc(s.name||'')}</td><td>${s.cage?`<a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(s.cage)}&page=1">${esc(s.cage)}</a>`:''}</td><td>${esc(s.contact||'')}</td><td>${esc(s.email||'')}</td><td>${esc(s.phone||'')}</td>
+    <td>${s.cage&&co[s.cage]?`<a href="#" class="cageGo" data-c="${esc(s.cage)}">${co[s.cage]}</a>`:''}</td><td>${quoteCount(s.id)||''}</td><td class="nom">${esc((s.notes||'').slice(0,60))}</td></tr>`).join('')||'<tr><td colspan="8" class="small">No suppliers yet. Add one here, or from an RFQ\'s approved sources.</td></tr>';
+}
+$('#supQ').oninput=renderSup;
+$('#sb').onclick=e=>{const g=e.target.closest('.cageGo');if(g){e.preventDefault();$('#tabFind').click();$('#cage').value=g.dataset.c;page=0;run();return}if(e.target.closest('a'))return;const tr=e.target.closest('tr[data-id]');if(tr)supForm(CRM.suppliers[tr.dataset.id])};
+$('#supAdd').onclick=()=>supForm({});
+$('#supCsv').onclick=()=>csv(sups().map(s=>[s.name,s.cage,s.contact,s.email,s.phone,s.website,s.notes]),['Name','CAGE','Contact','Email','Phone','Website','Notes']);
+function modal(html){$('#modalBox').innerHTML=html;$('#modalBg').classList.remove('hidden')}
+function closeModal(){$('#modalBg').classList.add('hidden')}
+$('#modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};
+function supForm(s,after){
+  s=s||{};const f=(id,l,v,t='text')=>`<div><label>${l}</label><input id="${id}" type="${t}" value="${esc(v||'')}"></div>`;
+  modal(`<div class="bar"><strong>${s.id?'Edit supplier':'New supplier'}</strong><button class="btn" id="mX">✕</button></div>
+  ${f('sName','Company name',s.name)}<div class="row2">${f('sCage','CAGE',s.cage)}${f('sContact','Contact name',s.contact)}</div>
+  <div class="row2">${f('sEmail','Email (for RFQs)',s.email,'email')}${f('sPhone','Phone',s.phone)}</div>${f('sWeb','Website',s.website)}
+  <label>Notes</label><textarea id="sNotes" rows="3">${esc(s.notes||'')}</textarea>
+  ${s.cage?`<div class="small" style="margin-top:6px"><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(s.cage)}&page=1">Look up ${esc(s.cage)} on DLA CAGE</a> for the company name and address.</div>`:''}
+  <div style="display:flex;justify-content:space-between;margin-top:10px"><button class="btn p" id="sSave">Save</button>${s.id?'<button class="btn" id="sDel">Delete</button>':''}</div>`);
+  $('#mX').onclick=closeModal;
+  $('#sSave').onclick=()=>{
+    const cage=$('#sCage').value.trim().toUpperCase(),dup=cage&&supByCage(cage);
+    const id=s.id||(dup&&dup.id)||(cage||('s'+Date.now().toString(36)));
+    CRM.suppliers[id]={...(CRM.suppliers[id]||{}),id,name:$('#sName').value.trim(),cage,contact:$('#sContact').value.trim(),email:$('#sEmail').value.trim(),phone:$('#sPhone').value.trim(),website:$('#sWeb').value.trim(),notes:$('#sNotes').value,saved:nowIso()};
+    crmSave();closeModal();renderSup();after&&after(id);
+  };
+  if(s.id)$('#sDel').onclick=()=>{if(!confirmDel())return;delete CRM.suppliers[s.id];CRM.deleted['s:'+s.id]=nowIso();crmSave();closeModal();renderSup()};
+}
+function confirmDel(){return window.confirm?confirm('Delete this supplier?'):true}
+
+// ---------- RFQ emails ----------
+function mailBody(sup,rows){
+  const lines=rows.map(r=>{const pn=sup.cage&&(r[15]||[]).find(a=>a[0]===sup.cage);
+    return `- NSN ${fmtNsn(r[1])}${pn?` / P/N ${pn[1]} (CAGE ${sup.cage})`:''}\n  ${r[4]}\n  Qty: ${r[5]??''} ${r[6]||''}${r[13]?` | Delivery required within ${r[13]} days ARO`:''}\n  Ref: ${r[0]}`}).join('\n\n');
+  return `Hello${sup.contact?' '+sup.contact:''},\n\nTier2 Rigging LLC (CAGE 175A8) is requesting a quote on the following:\n\n${lines}\n\nPlease include:\n- Unit price (and any quantity breaks)\n- Lead time (days ARO)\n- Country of origin\n- Shipping weight and dimensions\n- Quote valid through date\n- Certificate of Conformance / traceability available (Y/N)\n\nThank you,\n${CFG.sig}`;
+}
+function mailto(sup,rows){
+  const subj=rows.length===1?`RFQ: ${rows[0][4]} | NSN ${fmtNsn(rows[0][1])}`:`RFQ: ${rows.length} items | Tier2 Rigging LLC`;
+  return `mailto:${encodeURIComponent(sup.email)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(mailBody(sup,rows))}`;
+}
+function markRequested(rows,sid){
+  for(const r of rows){const k=key(r),p=pipe[k]||{status:'Sourcing',row:r};p.row=r;if(!p.status||p.status==='Watching')p.status='Sourcing';
+    p.quotes=p.quotes||{};p.quotes[sid]={...(p.quotes[sid]||{}),requested:today,date:nowIso()};p.saved=nowIso();pipe[k]=p}
+  crmSave();pipeCount();renderTable();
+}
+function candSups(r){
+  const p=pipe[key(r)]||{},ids=new Set(Object.keys(p.quotes||{}));
+  for(const a of(r[15]||[])){const s=supByCage(a[0]);if(s)ids.add(s.id)}
+  return [...ids].map(id=>CRM.suppliers[id]).filter(Boolean);
+}
+function renderQuotes(r){
+  const k=key(r),el=$('#qList');if(!el)return;const p=pipe[k]||{},qs=p.quotes||{};
+  const missing=(r[15]||[]).filter(a=>!supByCage(a[0]));
+  el.innerHTML=candSups(r).map(s=>{const q=qs[s.id]||{};return `<div class="qrow" data-sid="${esc(s.id)}"><div class="top"><div><b>${esc(s.name||s.cage)}</b> <span class="small">${esc(s.cage||'')} ${esc(s.email||'no email')}</span>${q.requested?` <span class="tag t-ok">requested ${q.requested}</span>`:''}</div>
+    <div>${s.email?`<a class="btn p qMail" href="${mailto(s,[r])}">Draft RFQ email</a>`:`<button class="btn qEdit">Add email</button>`}</div></div>
+    <div class="qgrid"><input class="qP" type="number" step="0.01" placeholder="$/ea" value="${q.price??''}"><input class="qL" type="number" placeholder="Lead days" value="${q.lead??''}"><input class="qO" placeholder="Origin (e.g. USA)" value="${esc(q.origin||'')}"></div>
+    <div style="display:flex;gap:6px;margin-top:6px"><input class="qN" placeholder="Quote notes" value="${esc(q.notes||'')}" style="flex:1"><button class="btn qSave">Save quote</button>${q.price!=null?'<button class="btn qUse">Use</button>':''}</div></div>`}).join('')
+  +(missing.length?`<div class="small" style="margin-top:8px">Approved sources not in your suppliers yet: ${missing.map(a=>`<a href="#" class="qAddCage" data-c="${esc(a[0])}">+ ${esc(a[0])}</a>`).join(' ')}</div>`:'');
+  const sel=$('#qLink');sel.innerHTML='<option value="">Link a supplier…</option>'+sups().filter(s=>!candSups(r).includes(s)).map(s=>`<option value="${esc(s.id)}">${esc(s.name||s.cage)}</option>`).join('');
+  sel.onchange=()=>{if(!sel.value)return;const p2=pipe[k]||{status:'Sourcing',row:r};p2.row=r;p2.quotes=p2.quotes||{};p2.quotes[sel.value]=p2.quotes[sel.value]||{date:nowIso()};p2.saved=nowIso();pipe[k]=p2;crmSave();renderQuotes(r)};
+  $('#qNew').onclick=()=>supForm({},id=>{sel.innerHTML+=`<option value="${esc(id)}"></option>`;sel.value=id;sel.onchange()});
+  el.querySelectorAll('.qAddCage').forEach(a=>a.onclick=e=>{e.preventDefault();supForm({cage:a.dataset.c},()=>renderQuotes(r))});
+  el.querySelectorAll('.qrow').forEach(row=>{const sid=row.dataset.sid;
+    const m=row.querySelector('.qMail');if(m)m.addEventListener('click',()=>setTimeout(()=>{markRequested([r],sid);renderQuotes(r)},300));
+    const ed=row.querySelector('.qEdit');if(ed)ed.onclick=()=>supForm(CRM.suppliers[sid],()=>renderQuotes(r));
+    row.querySelector('.qSave').onclick=()=>{const p2=pipe[k]||{status:'Sourcing',row:r};p2.row=r;p2.quotes=p2.quotes||{};
+      const v=x=>row.querySelector(x).value;p2.quotes[sid]={...(p2.quotes[sid]||{}),price:v('.qP')===''?null:+v('.qP'),lead:v('.qL')===''?null:+v('.qL'),origin:v('.qO'),notes:v('.qN'),date:nowIso()};
+      if(!p2.status||p2.status==='Watching')p2.status='Sourcing';p2.saved=nowIso();pipe[k]=p2;crmSave();pipeCount();renderTable();renderQuotes(r)};
+    const u=row.querySelector('.qUse');if(u)u.onclick=()=>{const q=(pipe[k].quotes||{})[sid];$('#pv').value=CRM.suppliers[sid].name||CRM.suppliers[sid].cage;$('#pc').value=q.price;$('#pc').dispatchEvent(new Event('input'))};
+  });
+}
+$('#bulkMail').onclick=()=>{
+  const rows=[...SEL].map(k=>pipe[k]&&pipe[k].row).filter(Boolean);
+  if(!rows.length){modal('<div class="bar"><strong>Draft RFQ emails</strong><button class="btn" id="mX">✕</button></div><p class="small">Tick the RFQs you want quoted using the boxes on the left, then click this again.</p>');$('#mX').onclick=closeModal;return}
+  const by={};for(const r of rows)for(const s of candSups(r)){(by[s.id]=by[s.id]||{s,rows:[]}).rows.push(r)}
+  const list=Object.values(by);
+  modal(`<div class="bar"><strong>Draft RFQ emails (${rows.length} RFQs)</strong><button class="btn" id="mX">✕</button></div>
+  <p class="small">One email per supplier, listing every selected RFQ they can quote. Each opens as a draft in Thunderbird. Pick your purchasing@ address in the From box before sending.</p>
+  ${list.map(({s,rows:rs})=>`<div class="qrow"><div class="top"><div><b>${esc(s.name||s.cage)}</b> <span class="small">${esc(s.email||'no email')} · ${rs.length} item${rs.length>1?'s':''}</span></div>
+  ${s.email?`<a class="btn p bm" data-sid="${esc(s.id)}" href="${mailto(s,rs)}">Open draft</a>`:'<span class="small">Add an email in Suppliers</span>'}</div></div>`).join('')||'<p class="small">None of the selected RFQs have linked suppliers yet. Open an RFQ and add or link suppliers first.</p>'}`);
+  $('#mX').onclick=closeModal;
+  $('#modalBox').querySelectorAll('.bm').forEach(a=>a.addEventListener('click',()=>{const g=by[a.dataset.sid];setTimeout(()=>{markRequested(g.rows,g.s.id);a.textContent='Opened ✓'},300)}));
+};
+
+// ---------- settings ----------
+function cfgForm(){
+  modal(`<div class="bar"><strong>Settings</strong><button class="btn" id="mX">✕</button></div>
+  <label>Sync: private GitHub repo</label><input id="cRepo" placeholder="tier2rigging/bidpilot-data" value="${esc(CFG.repo)}">
+  <label>Sync: GitHub token</label><input id="cTok" type="password" placeholder="github_pat_…" value="${esc(CFG.token)}">
+  <div class="small">Fine-grained token with <b>Contents: Read and write</b> on that one repo only. It's stored in this browser only. Enter it once on each device.</div>
+  <label>Email signature (used in RFQ drafts)</label><textarea id="cSig" rows="5">${esc(CFG.sig)}</textarea>
+  <div style="display:flex;gap:6px;margin-top:10px"><button class="btn p" id="cSave">Save &amp; sync</button><button class="btn" id="cExp">Download backup</button></div>
+  <div class="small" id="cMsg" style="margin-top:6px">${esc($('#syncBadge').title||'')}</div>`);
+  $('#mX').onclick=closeModal;
+  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
+  $('#cExp').onclick=()=>{const b=new Blob([JSON.stringify(CRM,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-crm-${today}.json`;a.click()};
+}
+$('#cfgBtn').onclick=cfgForm;$('#syncBadge').onclick=cfgForm;
+$('#stPipe').onclick=()=>{$('#pipePane').classList.remove('hidden');$('#supPane').classList.add('hidden');$('#stPipe').classList.add('on');$('#stSup').classList.remove('on');renderPipe()};
+$('#stSup').onclick=()=>{$('#supPane').classList.remove('hidden');$('#pipePane').classList.add('hidden');$('#stSup').classList.add('on');$('#stPipe').classList.remove('on');renderSup()};
+$('#pipeCsv').onclick=()=>csv(Object.values(pipe).map(p=>{const r=p.row;const qs=Object.entries(p.quotes||{}).filter(([,q])=>q.price!=null).map(([id,q])=>`${(CRM.suppliers[id]||{}).name||id}: $${q.price}${q.lead?' / '+q.lead+'d':''}`).join('; ');return[p.status,r[8],r[0],fmtNsn(r[1]),r[4],r[5],p.vendor,p.cost,p.ship,p.bid,qs,p.notes]}),['Status','Return by','Solicitation','NSN','Item','Qty','Vendor','Vendor $/ea','Shipping','My bid $/ea','Quotes','Notes']);
+$('#tabFind').onclick=()=>{$('#findView').classList.remove('hidden');$('#pipeView').classList.add('hidden');$('#tabFind').classList.add('on');$('#tabPipe').classList.remove('on')};
+$('#tabPipe').onclick=()=>{$('#pipeView').classList.remove('hidden');$('#findView').classList.add('hidden');$('#tabPipe').classList.add('on');$('#tabFind').classList.remove('on');renderPipe();renderSup()};
+
+chips(); pipeCount(); run(); syncBadge('Local only'); if(CFG.repo&&CFG.token) sync();
+</script>
+</body>
+</html>

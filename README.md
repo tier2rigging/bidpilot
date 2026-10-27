@@ -10,7 +10,7 @@ Search every open DLA/DIBBS RFQ across all 666 FSCs, see DLA award history per F
 - **Data:** `data/rfqs.js`, rebuilt weekdays by GitHub Actions from DIBBS's public daily RFQ files
 - **NSN award history:** collected daily from DIBBS "Awards by Award Date" and saved permanently in `data/awards/` (DIBBS purges old awards; this doesn't). Quantity and unit price are read from each award PDF.
 - **FSC award history:** pulled live from USAspending.gov (free, no key)
-- **Pipeline:** saved in your browser; use Export CSV to back it up
+- **CRM (Manage tab):** bid pipeline, suppliers, and quotes. Syncs to a private repo (`crm.json`) once you add the repo and a token in ⚙ Settings; until then it's saved in that browser only.
 
 ## Setup (about 10 minutes)
 
@@ -40,3 +40,16 @@ Open the failed run in the Actions tab and read the log.
 ## How award history builds
 
 The first run pulls as many past days as DIBBS still has (30 days with the backfill). After that it adds every weekday's awards and re-checks the last 7 days for late postings. History only grows, so the longer it runs, the closer it gets to NSN-Now's depth. Award PDFs are read at up to 600 per run; any backlog is finished on later runs.
+
+## CRM sync setup
+
+1. Create a **private** repo named `bidpilot-data` and check **Add a README**.
+2. GitHub → profile picture → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**. Set Repository access to **Only select repositories → bidpilot-data**, and under Permissions set **Contents: Read and write**. Copy the token.
+3. In BidPilot → **⚙ Settings**, enter `tier2rigging/bidpilot-data`, paste the token, and click **Save & sync**. The badge turns **Synced ✓**.
+4. On any other device, open BidPilot and enter the same repo and token once.
+
+When the token expires, the badge shows **Sync error**. Generate a new token and paste it in Settings.
+
+## RFQ emails
+
+In an RFQ's drawer, under **Suppliers & quotes**: add approved-source CAGEs as suppliers (with their email), then click **Draft RFQ email**. It opens a pre-filled draft in your email app (Thunderbird). Choose purchasing@ in the From box before you send. To quote several RFQs at once, tick them in **Manage → Bid pipeline** and click **Draft RFQ emails for selected**. That makes one email per supplier. Log each reply's price, lead time, and origin with **Save quote**, then click **Use** to copy it into the bid calculator.
