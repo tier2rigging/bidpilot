@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("5836",[["SPE8EN27P0044 &raquo; Award/Basic Package View","","","","7YWT4",27679.68,"2026-10-15","2026-10-15","5836016725757","CAMERA-RECORDING, VIDEO","7018365230","SPE8EN26T3223","https://dibbs2.bsm.dla.mil/Downloads/Awards/15OCT26/SPE8EN27P0044.PDF",null,"",null]]);

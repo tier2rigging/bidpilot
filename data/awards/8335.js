@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("8335",[["SPE2DS27P0154 &raquo; Award/Basic Package View","","","","0AG09",54,"2026-10-20","2026-10-20","8335015287748","INSOLES, FOOTWEAR","7018129338","","https://dibbs2.bsm.dla.mil/Downloads/Awards/20OCT26/SPE2DS27P0154.PDF",null,"",null]]);

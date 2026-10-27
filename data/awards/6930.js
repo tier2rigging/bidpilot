@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("6930",[["SPE8E527P0146 &raquo; Award/Basic Package View","","","","4M381",3318,"2026-10-26","2026-10-26","6930014990618","BAG, POLYVINYL, PRACT","7017585355","SPE8E526Q0447","https://dibbs2.bsm.dla.mil/Downloads/Awards/26OCT26/SPE8E527P0146.PDF",null,"",null]]);

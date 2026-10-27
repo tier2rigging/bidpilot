@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("1260",[["SPE7M127P0366 &raquo; Award/Basic Package View","","","","7DWH2",83427.3,"2026-10-19","2026-10-19","1260016750618","CASE, LASER RANGE FI","7015905189","SPE7M126T320V","https://dibbs2.bsm.dla.mil/Downloads/Awards/19OCT26/SPE7M127P0366.PDF",null,"",null]]);

@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("3470",[["SPE7M427V0333 &raquo; Award/Basic Package View","","","","57AD8",7469.7,"2026-10-16","2026-10-16","3470016282257","SHOP EQUIPMENT, WELDING","7018661692","SPE7M427T0584","https://dibbs2.bsm.dla.mil/Downloads/Awards/16OCT26/SPE7M427V0333.PDF",null,"",null]]);

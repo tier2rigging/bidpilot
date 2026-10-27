@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("0001",[["SPE7M127V0386 &raquo; Award/Basic Package View","","","","54991",1965,"2026-10-13","2026-10-13","0001016308069","RESISTOR, FIXED, FILM","7016622156","SPE7M126T383L","https://dibbs2.bsm.dla.mil/Downloads/Awards/13OCT26/SPE7M127V0386.PDF",null,"",null]]);

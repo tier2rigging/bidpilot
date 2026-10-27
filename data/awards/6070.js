@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("6070",[["SPE7M127D60LU &raquo; Award/Basic Package View","","","","6PZL1",350000,"2026-10-22","2026-10-22","6070015988859","CLEANING TOOL, FIBER OPTIC CONNECTOR","1000244547","SPE7M126U6790","https://dibbs2.bsm.dla.mil/Downloads/Awards/22OCT26/SPE7M127D60LU.PDF",null,"",null]]);

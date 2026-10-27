@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("5810",[["SPE4A727P0661 &raquo; Award/Basic Package View","","","","4K0V2",31256.6,"2026-10-19","2026-10-19","5810015298767","COMMUNICATIONS SECURITY MODULE","7018413016","SPE4A726T773C","https://dibbs2.bsm.dla.mil/Downloads/Awards/19OCT26/SPE4A727P0661.PDF",null,"",null]]);

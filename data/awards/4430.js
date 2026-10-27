@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("4430",[["SPE8E827V0056 &raquo; Award/Basic Package View","","","","6G2F2",14880,"2026-10-13","2026-10-13","4430011428163","OVEN, THERMAL DRYING, ELECTRIC","7018588898","SPE8E827T0017","https://dibbs2.bsm.dla.mil/Downloads/Awards/13OCT26/SPE8E827V0056.PDF",null,"",null]]);

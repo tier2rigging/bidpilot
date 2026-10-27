@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("5825",[["SPE4A727P0797 &raquo; Award/Basic Package View","","","","6KT72",8642.76,"2026-10-19","2026-10-19","5825016651072","NAVIGATION SET, SATELLITE SIGNALS","7018663538","SPE4A727T0350","https://dibbs2.bsm.dla.mil/Downloads/Awards/19OCT26/SPE4A727P0797.PDF",null,"",null]]);

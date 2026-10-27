@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("8910",[["SPE3S124DZ205 SPE3S127F0036 &raquo; Delivery Order Package View 145","","145","","1Y591",63168,"2026-10-21","2026-10-21","8910014742621","MILK, LOWFAT","7018788295","","https://dibbs2.bsm.dla.mil/Downloads/Awards/01AUG24/SPE3S124DZ205.PDF",null,"",null]]);

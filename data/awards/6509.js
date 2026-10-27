@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("6509",[["SPE2DP27P0164 &raquo; Award/Basic Package View","","","","4PG41",1000.8,"2026-10-19","2026-10-19","6509015304283","GENTAMYCIN SULFATE BETAMETHASONE VALERAT","7018518009","SPE2DP26T5289","https://dibbs2.bsm.dla.mil/Downloads/Awards/19OCT26/SPE2DP27P0164.PDF",null,"",null]]);

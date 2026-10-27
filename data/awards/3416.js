@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("3416",[["SPE8E527P0100 &raquo; Award/Basic Package View","","","","30870",38878.6,"2026-10-20","2026-10-20","3416012311788","LATHE, ENGINE","7018364073","SPE8E527T0099","https://dibbs2.bsm.dla.mil/Downloads/Awards/20OCT26/SPE8E527P0100.PDF",null,"",null]]);

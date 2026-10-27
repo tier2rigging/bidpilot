@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("6021",[["SPE7M227P0256 &raquo; Award/Basic Package View","","","","7QNH3",8211.2,"2026-10-20","2026-10-20","6021016440943","SWITCH, FIBER OPTIC","7015892056","SPE7M126T7171","https://dibbs2.bsm.dla.mil/Downloads/Awards/20OCT26/SPE7M227P0256.PDF",null,"",null]]);

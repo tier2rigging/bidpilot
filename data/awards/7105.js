@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("7105",[["SPE8ED27P0069 &raquo; Award/Basic Package View","","","","L10K9",6500,"2026-10-14","2026-10-14","7105013338493","TABLE, FOLDING LEGS","7018161410","SPE8ED26T1406","https://dibbs2.bsm.dla.mil/Downloads/Awards/14OCT26/SPE8ED27P0069.PDF",null,"",null]]);
