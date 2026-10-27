@@ -117,7 +117,7 @@ td.nom{white-space:normal;min-width:160px}
     <div class="bar"><strong id="count"></strong><span><button class="btn" id="csv">Export CSV</button></span></div>
     <div class="tw"><table>
       <thead><tr>
-        <th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC</th><th data-k="15">Sources</th><th data-k="16">Last $/ea</th><th data-k="12" title="FOB / Inspection &amp; acceptance point (O = Origin, D = Destination)">FOB/Insp</th><th data-k="11">Type</th><th>Status</th>
+        <th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC</th><th data-k="15">Sources</th><th data-k="16">Last $/ea</th><th data-k="12">FOB</th><th data-k="16" title="Inspection &amp; acceptance point">Insp./Accept.</th><th data-k="11">Type</th><th>Status</th>
       </tr></thead>
       <tbody id="tb"></tbody>
     </table></div>
@@ -173,6 +173,7 @@ const daysLeft=d=>d?Math.round((new Date(d+'T12:00:00')-new Date(today+'T12:00:0
 const fmtNsn=n=>/^\d{13}$/.test(n)?`${n.slice(0,4)}-${n.slice(4,6)}-${n.slice(6,9)}-${n.slice(9)}`:n;
 const key=r=>`${r[0]}:${r[2]}:${r[1]}`;
 const pdf=r=>`${FILES}/Downloads/RFQ/${r[0].slice(-1)}/${(r[14]||r[0]+'.pdf').toUpperCase()}`;
+const OD=v=>v==='O'?'Origin':v==='D'?'Dest.':'';
 const openAmsc=a=>!a||a==='G'||a==='Z';
 
 // ---------- CRM data + GitHub sync ----------
@@ -288,7 +289,7 @@ function renderTable(){
     <td>${r[8]||''} <span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span></td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
     <td class="nom">${esc(r[4])}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
     <td>${SA[r[9]]||r[9]}</td><td>${r[10]?`<span class="tag ${openAmsc(r[10])?'t-ok':'t-warn'}" title="${esc(AMSC[r[10]]||'')}">${r[10]}</span>`:''}</td>
-    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=sumOf(r);if(!m)return '';return `${m[0]>0?'$'+m[0].toFixed(2):''}${m[4]?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${r[12]||r[16]?`${r[12]||'?'}/${r[16]||'?'}`:''}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="13" class="small">No RFQs match.</td></tr>`;
+    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=sumOf(r);if(!m)return '';return `${m[0]>0?'$'+m[0].toFixed(2):''}${m[4]?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="14" class="small">No RFQs match.</td></tr>`;
   const pages=Math.max(1,Math.ceil(filtered.length/PER));$('#pg').textContent=`Page ${page+1} of ${pages}`;
 }
 function renderFscList(){
