@@ -53,3 +53,11 @@ When the token expires, the badge shows **Sync error**. Generate a new token and
 ## RFQ emails
 
 In an RFQ's drawer, under **Suppliers & quotes**: add approved-source CAGEs as suppliers (with their email), then click **Draft RFQ email**. It opens a pre-filled draft in your email app (Thunderbird). Choose purchasing@ in the From box before you send. To quote several RFQs at once, tick them in **Manage → Bid pipeline** and click **Draft RFQ emails for selected**. That makes one email per supplier. Log each reply's price, lead time, and origin with **Save quote**, then click **Use** to copy it into the bid calculator.
+
+## DIBBS batch quote export
+
+1. In **⚙ Settings → DIBBS batch quote: company answers**, set each answer once: business type, affirmative action, previous contracts, ADR, packaging, hazmat, material, dealer/manufacturer, and your quality system. These are your certifications. BidPilot never picks them for you.
+2. In each RFQ's **Bid calculator**, set your bid, then open **DIBBS batch quote details**: delivery days, the approved part you're offering, the manufacturer CAGE, and country of origin. Clicking **Use** on a supplier quote fills most of these.
+3. In **Manage → Bid pipeline**, tick the RFQs and click **Export DIBBS batch file**. Anything missing is listed per RFQ. Download the file and upload it on DIBBS under Batch Quote Upload, then review each quote on DIBBS before submitting.
+
+Not exported (quote these on DIBBS directly): foreign-origin items, hazmat items, and QPL items.

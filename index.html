@@ -46,6 +46,9 @@ td.nom{white-space:normal;min-width:160px}
 .hidden{display:none}
 #modalBg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
 #modalBg.hidden{display:none}
+.calc{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px}.calc .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.verdict{border-radius:8px;padding:8px 10px;margin-top:8px;font-size:13px}.v-go{background:var(--okb);color:var(--ok)}.v-chk{background:var(--warnb);color:var(--warn)}.v-no{background:var(--acc2);color:var(--acc)}
+.sumgrid{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px;margin-top:8px}.sumgrid div:nth-child(odd){color:var(--mute)}
 #modalBox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(560px,100%)}
 .sync{font-size:12px;padding:3px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--line);cursor:pointer}
 .sync.ok{color:var(--ok);background:var(--okb)}.sync.err{color:var(--acc);background:var(--acc2)}
@@ -129,7 +132,7 @@ td.nom{white-space:normal;min-width:160px}
   <section class="card">
     <div class="subtabs"><button class="btn on" id="stPipe">Bid pipeline</button><button class="btn" id="stSup">Suppliers</button></div>
     <div id="pipePane">
-    <div class="bar"><strong>Bid pipeline</strong><span><button class="btn p" id="bulkMail">Draft RFQ emails for selected</button> <button class="btn" id="pipeCsv">Export CSV</button></span></div>
+    <div class="bar"><strong>Bid pipeline</strong><span><button class="btn p" id="bulkMail">Draft RFQ emails for selected</button> <button class="btn p" id="bqExport">Export DIBBS batch file</button> <button class="btn" id="pipeCsv">Export CSV</button></span></div>
     <div class="tw"><table>
       <thead><tr><th><input type="checkbox" id="selAll" style="width:auto"></th><th>Status</th><th>Return by</th><th>Solicitation</th><th>NSN</th><th>Item</th><th>Qty</th><th>Quotes</th><th>Vendor</th><th>Vendor $/ea</th><th>My bid $/ea</th><th>Margin</th></tr></thead>
       <tbody id="pb"></tbody>
@@ -174,10 +177,18 @@ const fmtNsn=n=>/^\d{13}$/.test(n)?`${n.slice(0,4)}-${n.slice(4,6)}-${n.slice(6,
 const key=r=>`${r[0]}:${r[2]}:${r[1]}`;
 const pdf=r=>`${FILES}/Downloads/RFQ/${r[0].slice(-1)}/${(r[14]||r[0]+'.pdf').toUpperCase()}`;
 const OD=v=>v==='O'?'Origin':v==='D'?'Dest.':'';
+// Bid math shared by the drawer and the pipeline table.
+function bidMath(p,q){
+  q=q||1;const n=v=>+v||0;
+  const goods=n(p.cost)*q, extras=n(p.ship)+n(p.pack)+n(p.labor)+n(p.other)+n(p.freight);
+  const cost=goods+extras, rev=n(p.bid)*q;
+  return {cost,rev,profit:rev-cost,margin:rev?((rev-cost)/rev*100):null,unitCost:cost/q};
+}
 const openAmsc=a=>!a||a==='G'||a==='Z';
 
 // ---------- CRM data + GitHub sync ----------
-const CFG=Object.assign({repo:'',token:'',sig:'Tier2 Rigging LLC\nCAGE: 175A8\nManorville, NY\n516-902-8843\ntier2rigging.com'},store.get('bp_cfg',{}));
+const CFG=Object.assign({repo:'',token:'',sig:'Tier2 Rigging LLC\nCAGE: 175A8\nManorville, NY\n516-902-8843\ntier2rigging.com',mtarget:20,qp:{cage:'175A8',sb:'',aac:'',pccr:'',adr:'',pkg:'',haz:'',mat:'',disc:'1',mfg:'DD',quality:'',fobCity:'Manorville',fobState:'NY',fobCountry:'US'}},store.get('bp_cfg',{}));
+CFG.qp=Object.assign({cage:'175A8',disc:'1',mfg:'DD',fobCity:'Manorville',fobState:'NY',fobCountry:'US'},CFG.qp||{});
 let CRM=store.get('bp_crm',null)||{pipeline:store.get('t2_pipe',{}),suppliers:{},deleted:{}};
 CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.deleted=CRM.deleted||{};
 let pipe=CRM.pipeline;
@@ -308,6 +319,7 @@ function csv(rows,head){const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;const
 $('#csv').onclick=()=>csv(filtered.map(r=>[r[8],r[0],fmtNsn(r[1]),r[4],r[3],FSC[r[3]]||'',r[5],r[6],SA[r[9]]||r[9],r[10],TYPE[r[11]]||r[11],r[13],r[2],(r[15]||[]).map(a=>a[0]+' '+a[1]).join('; '),r[12]==='O'?'Origin':r[12]==='D'?'Destination':'',r[16]==='O'?'Origin':r[16]==='D'?'Destination':'',pdf(r)]),['Return by','Solicitation','NSN','Item','FSC','FSC name','Qty','Unit','Set-aside','AMSC','Type','Delivery days','PR','Approved sources (CAGE PN)','FOB','Inspection/Acceptance','RFQ PDF']);
 
 // ---------- drawer ----------
+let DR_PTW=null;
 function openDrawer(r){
   const k=key(r), p=pipe[k]||{};
   const dr=$('#drawer');
@@ -344,10 +356,25 @@ function openDrawer(r){
   <div style="display:flex;gap:6px;margin-top:8px"><select id="qLink" style="flex:1"><option value="">Link a supplier…</option></select><button class="btn" id="qNew">+ New supplier</button></div>
   <label>Pipeline status</label>
   <div class="status">${STAT.map(s=>`<button class="btn ${p.status===s?'on':''}" data-s="${s}">${s}</button>`).join('')}${p.status?'<button class="btn" data-s="">Remove</button>':''}</div>
-  <div class="row2"><div><label>Vendor</label><input id="pv" value="${esc(p.vendor||'')}"></div><div><label>Vendor $/ea</label><input id="pc" type="number" step="0.01" value="${p.cost??''}"></div></div>
-  <div class="row2"><div><label>Shipping $ total</label><input id="ps" type="number" step="0.01" value="${p.ship??''}"></div><div><label>My bid $/ea</label><input id="pb2" type="number" step="0.01" value="${p.bid??''}"></div></div>
-  <div style="margin-top:6px"><button class="btn" id="lastAw">Bid = last award +3%/yr</button> <span class="small" id="lastAwNote"></span></div>
-  <div class="small" id="margin" style="margin-top:6px"></div>
+  <div class="calc">
+  <strong style="font-size:14px">Bid calculator</strong> <span class="small">Qty ${r[5]??1} ${r[6]||''} · FOB ${r[12]==='D'?'Destination: you pay freight to DLA':r[12]==='O'?'Origin: DLA arranges freight':'unknown'}</span>
+  <div class="row2"><div><label>Supplier</label><input id="pv" value="${esc(p.vendor||'')}"></div><div><label>Supplier $/ea</label><input id="pc" class="cin" type="number" step="0.01" value="${p.cost??''}"></div></div>
+  <div class="row3"><div><label>Inbound ship $</label><input id="ps" class="cin" type="number" step="0.01" value="${p.ship??''}"></div><div><label>Packaging $</label><input id="pk" class="cin" type="number" step="0.01" value="${p.pack??''}"></div><div><label>Labor $</label><input id="pl" class="cin" type="number" step="0.01" value="${p.labor??''}"></div></div>
+  <div class="row3"><div><label>Outbound freight $</label><input id="pf" class="cin" type="number" step="0.01" value="${p.freight??''}" ${r[12]==='O'?'placeholder="FOB Origin: usually 0"':''}></div><div><label>Other / fees $</label><input id="po" class="cin" type="number" step="0.01" value="${p.other??''}"></div><div><label>Target margin %</label><input id="pm" class="cin" type="number" step="1" value="${p.mtarget??CFG.mtarget}"></div></div>
+  <div class="small" style="margin-top:4px">Dollar amounts other than Supplier $/ea are totals for the whole line.</div>
+  <div class="row2" style="align-items:end"><div><label>My bid $/ea</label><input id="pb2" class="cin" type="number" step="0.01" value="${p.bid??''}"></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="atMargin">At target margin</button><button class="btn" id="lastAw">Last award +3%/yr</button></div></div>
+  <div class="small" id="lastAwNote" style="margin-top:4px"></div>
+  <div class="sumgrid" id="bidSum"></div>
+  <div id="verdict"></div>
+  <details style="margin-top:10px" ${p.bqDays!=null||p.bid!=null?'open':''}><summary style="cursor:pointer;font-weight:600;font-size:13px">DIBBS batch quote details</summary>
+  <div class="row2"><div><label>Delivery days you'll quote</label><input id="bqDays" type="number" step="1" value="${p.bqDays??(r[13]??'')}"></div>
+  <div><label>Part you're offering</label><select id="bqOffer">${(r[15]||[]).length?r[15].map(([c,pn])=>`<option value="${esc(c+'|'+pn)}" ${p.bqOffer===c+'|'+pn?'selected':''}>${esc(c)} · ${esc(pn)}</option>`).join(''):'<option value="">No approved part (spec/drawing item)</option>'}</select></div></div>
+  <div class="row2"><div><label>Mfr CAGE (actual source)</label><input id="bqMfr" value="${esc(p.bqMfr||'')}" placeholder="defaults to offered part's CAGE"></div>
+  <div><label>Country of origin</label><select id="bqEnd"><option value="">Choose…</option><option value="US" ${p.bqEnd==='US'?'selected':''}>USA (domestic)</option><option value="X" ${p.bqEnd==='X'?'selected':''}>Foreign: I'll finish on DIBBS</option></select></div></div>
+  ${r[16]==='O'?`<div><label>Origin inspection CAGE (where DLA inspects)</label><input id="bqInsp" value="${esc(p.bqInsp||'')}" placeholder="defaults to Mfr CAGE"></div>`:''}
+  <div class="small" style="margin-top:4px">Used by <b>Manage → Export DIBBS batch file</b>. Your company answers (small business, ADR, etc.) are set once in ⚙ Settings.</div>
+  </details>
+  </div>
   <label>Notes</label><textarea id="pn" rows="3">${esc(p.notes||'')}</textarea>
   <div style="margin-top:8px"><button class="btn p" id="psave">Save</button></div>
   <h3 style="font-size:15px;margin:18px 0 4px">Award history — this NSN</h3>
@@ -358,11 +385,32 @@ function openDrawer(r){
   <div id="aw" class="small" style="margin-top:8px">Loading…</div>`;
   dr.classList.add('open');
   $("#dclose").onclick=()=>dr.classList.remove('open');
-  const mcalc=()=>{const c=+$('#pc').value,s=+$('#ps').value||0,b=+$('#pb2').value,q=r[5]||1;
-    if(c&&b){const cost=c*q+s,rev=b*q;$('#margin').textContent=`Cost $${cost.toFixed(2)} · Revenue $${rev.toFixed(2)} · Margin $${(rev-cost).toFixed(2)} (${((rev-cost)/rev*100).toFixed(1)}%)`}else $('#margin').textContent=''};
-  ['#pc','#ps','#pb2'].forEach(s=>$(s).oninput=mcalc);mcalc();
+  const q=r[5]||1, $v=id=>$(id).value===''?null:+$(id).value;
+  const $s=id=>$(id)?$(id).value.trim():'';
+  const form=()=>({bqDays:$v('#bqDays'),bqOffer:$s('#bqOffer'),bqMfr:$s('#bqMfr').toUpperCase(),bqEnd:$s('#bqEnd'),bqInsp:$s('#bqInsp').toUpperCase(),cost:$v('#pc'),ship:$v('#ps'),pack:$v('#pk'),labor:$v('#pl'),freight:$v('#pf'),other:$v('#po'),mtarget:$v('#pm'),bid:$v('#pb2')});
+  const money=v=>'$'+(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  window.mcalc=()=>{
+    const f=form(),m=bidMath(f,q),ptw=DR_PTW,tgt=f.mtarget??CFG.mtarget;
+    $('#bidSum').innerHTML=f.cost==null&&f.bid==null?'':`<div>Total cost</div><div>${money(m.cost)} <span class="small">(${money(m.unitCost)}/ea all-in)</span></div>
+      <div>Revenue</div><div>${f.bid!=null?money(m.rev):'—'}</div>
+      <div>Profit</div><div>${f.bid!=null?money(m.profit)+` (${m.margin.toFixed(1)}%)`:'—'}</div>
+      <div>Break-even</div><div>${money(m.unitCost)}/ea</div>
+      <div>Price to win</div><div>${ptw?money(ptw)+'/ea <span class="small">(last award +3%/yr)</span>':'<span class="small">no priced award yet</span>'}</div>`;
+    const v=$('#verdict');
+    if(f.bid==null||f.cost==null){v.innerHTML='';return}
+    const over=ptw?(f.bid-ptw)/ptw*100:null;
+    let cls,msg;
+    if(m.profit<=0){cls='v-no';msg=`NO-GO: losing money. Break-even is ${money(m.unitCost)}/ea.`}
+    else if(m.margin<tgt){cls=ptw&&f.bid<=ptw?'v-chk':'v-no';msg=`${cls==='v-chk'?'CHECK':'NO-GO'}: margin ${m.margin.toFixed(1)}% is under your ${tgt}% target.`+(ptw&&f.bid<=ptw?(ptw-f.bid>0.01*ptw?` You could raise the bid up to ${money(ptw)}/ea and still be at the last award price.`:` You're already at price-to-win, so you'd need a cheaper supplier to hit your target.`):'')}
+    else if(ptw&&f.bid>ptw){cls='v-chk';msg=`CHECK: margin is good (${m.margin.toFixed(1)}%), but the bid is ${over.toFixed(1)}% over the last award +3%/yr. Expect competition at or below ${money(ptw)}.`}
+    else{cls='v-go';msg=`GO: ${m.margin.toFixed(1)}% margin`+(ptw?`, ${Math.abs(over).toFixed(1)}% under price-to-win.`:'. No award price to compare yet.')}
+    v.innerHTML=`<div class="verdict ${cls}">${msg}</div>`;
+  };
+  dr.querySelectorAll('.cin').forEach(i=>i.oninput=mcalc);
+  $('#atMargin').onclick=()=>{const f=form(),tg=(f.mtarget??CFG.mtarget)/100;if(f.cost==null)return;const b=bidMath({...f,bid:0},q).unitCost/(1-tg);$('#pb2').value=b.toFixed(2);mcalc()};
+  DR_PTW=null;mcalc();
   const save=status=>{
-    const cur={...(pipe[k]||{}),status:status??((pipe[k]||{}).status||'Watching'),vendor:$('#pv').value,cost:$('#pc').value===''?null:+$('#pc').value,ship:$('#ps').value===''?null:+$('#ps').value,bid:$('#pb2').value===''?null:+$('#pb2').value,notes:$('#pn').value,row:r,saved:new Date().toISOString()};
+    const cur={...(pipe[k]||{}),status:status??((pipe[k]||{}).status||'Watching'),vendor:$('#pv').value,...form(),notes:$('#pn').value,row:r,saved:new Date().toISOString()};
     if(status==='')delPipe(k);else{pipe[k]=cur;crmSave()} pipeCount(); renderTable(); openDrawer(r);
   };
   dr.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>save(b.dataset.s));
@@ -378,9 +426,9 @@ async function nsnAwards(r){
   const priced=list.find(a=>a[15]>0&&a[5]!==0);
   const btn=$('#lastAw');
   if(priced){const yrs=(new Date(today)-new Date(priced[6]))/3.156e10, bid=priced[15]*Math.pow(1.03,Math.max(0,yrs));
-    $('#lastAwNote').textContent=`Last $${priced[15].toFixed(2)} on ${priced[6]}`;
-    btn.onclick=()=>{$('#pb2').value=bid.toFixed(2);$('#pb2').dispatchEvent(new Event('input'))}}
-  else{btn.disabled=true;$('#lastAwNote').textContent='No priced award collected yet'}
+    $('#lastAwNote').textContent=`Last award $${priced[15].toFixed(2)}/ea on ${priced[6]} (CAGE ${priced[4]}).`;
+    DR_PTW=bid;btn.onclick=()=>{$('#pb2').value=bid.toFixed(2);mcalc()};mcalc()}
+  else{btn.disabled=true;$('#lastAwNote').textContent='No priced award collected yet for this NSN.'}
   if(!list.length){el.textContent='No awards collected for this NSN yet. History builds from the first daily run onward.';return}
   const pkg=a=>a[1]?`${DIBBS}/Awards/AwdRec.aspx?contract=${a[0]}&dlv=${a[1]}&cnt=${a[2]}`:'';
   el.innerHTML=`<table class="aw"><tbody><tr><td><b>Date</b></td><td><b>CAGE</b></td><td><b>Qty</b></td><td><b>$/ea</b></td><td><b>Total</b></td><td><b>Award</b></td></tr>${list.map(a=>`<tr>
@@ -413,7 +461,7 @@ function pipeCount(){const n=Object.keys(pipe).length;$('#pipeCount').textConten
 const SEL=new Set();
 function renderPipe(){
   const items=Object.values(pipe).sort((a,b)=>(a.row[8]||'').localeCompare(b.row[8]||''));
-  $('#pb').innerHTML=items.map(p=>{const r=p.row,k=key(r),q=r[5]||1,m=p.cost&&p.bid?((p.bid*q-(p.cost*q+(p.ship||0)))/(p.bid*q)*100).toFixed(1)+'%':'';
+  $('#pb').innerHTML=items.map(p=>{const r=p.row,k=key(r),q=r[5]||1,bm=bidMath(p,q),m=p.cost!=null&&p.bid?bm.margin.toFixed(1)+'%':'';
     const qs=Object.values(p.quotes||{}),got=qs.filter(x=>x.price!=null).length;
     return `<tr data-k="${k}"><td><input type="checkbox" class="sel" data-k="${k}" ${SEL.has(k)?'checked':''} style="width:auto"></td><td><span class="tag t-acc">${p.status}</span></td><td>${r[8]} <span class="small">${daysLeft(r[8])}d</span></td><td>${r[0]}</td><td>${fmtNsn(r[1])}</td><td class="nom">${esc(r[4])}</td><td>${r[5]??''}</td><td>${qs.length?`${got}/${qs.length}`:''}</td><td>${esc(p.vendor||'')}</td><td>${p.cost??''}</td><td>${p.bid??''}</td><td>${m}</td></tr>`}).join('')||'<tr><td colspan="12" class="small">Nothing tracked yet. Open an RFQ and set a status.</td></tr>';
 }
@@ -496,7 +544,7 @@ function renderQuotes(r){
     row.querySelector('.qSave').onclick=()=>{const p2=pipe[k]||{status:'Sourcing',row:r};p2.row=r;p2.quotes=p2.quotes||{};
       const v=x=>row.querySelector(x).value;p2.quotes[sid]={...(p2.quotes[sid]||{}),price:v('.qP')===''?null:+v('.qP'),lead:v('.qL')===''?null:+v('.qL'),origin:v('.qO'),notes:v('.qN'),date:nowIso()};
       if(!p2.status||p2.status==='Watching')p2.status='Sourcing';p2.saved=nowIso();pipe[k]=p2;crmSave();pipeCount();renderTable();renderQuotes(r)};
-    const u=row.querySelector('.qUse');if(u)u.onclick=()=>{const q=(pipe[k].quotes||{})[sid];$('#pv').value=CRM.suppliers[sid].name||CRM.suppliers[sid].cage;$('#pc').value=q.price;$('#pc').dispatchEvent(new Event('input'))};
+    const u=row.querySelector('.qUse');if(u)u.onclick=()=>{const q=(pipe[k].quotes||{})[sid];const sp=CRM.suppliers[sid];$('#pv').value=sp.name||sp.cage;$('#pc').value=q.price;if(q.lead!=null&&$('#bqDays')&&!$('#bqDays').value)$('#bqDays').value=q.lead;if(/^(us|usa|united states)/i.test(q.origin||''))$('#bqEnd').value='US';const o=sp.cage&&[...$('#bqOffer').options].find(x=>x.value.startsWith(sp.cage+'|'));if(o)$('#bqOffer').value=o.value;mcalc()};
   });
 }
 $('#bulkMail').onclick=()=>{
@@ -512,23 +560,90 @@ $('#bulkMail').onclick=()=>{
   $('#modalBox').querySelectorAll('.bm').forEach(a=>a.addEventListener('click',()=>{const g=by[a.dataset.sid];setTimeout(()=>{markRequested(g.rows,g.s.id);a.textContent='Opened ✓'},300)}));
 };
 
+// ---------- DIBBS batch quote export ----------
+const BQC={};window.BQ_LOAD=(sh,obj)=>{BQC[sh]=obj};
+function loadBq(sh){return new Promise(res=>{if(BQC[sh])return res(BQC[sh]);const sc=document.createElement('script');sc.src=`data/bq/${sh}.js`;sc.onload=()=>res(BQC[sh]||{});sc.onerror=()=>res({});document.head.appendChild(sc)})}
+const BQ_TEMPLATE={3:'N',4:'N',24:'BI',25:'1',27:'90',29:'NAP',39:'N',57:'N',62:'N',68:'N',69:'N',73:'N',77:'N',96:'0',97:'0',98:'N',100:'N',117:'N',120:'N'};
+function expandBqRow(key,c){const[sol,pr]=key.split(':');const o={...BQ_TEMPLATE,...c,1:sol,46:pr};for(const k of Object.keys(o))if(o[k]==='')delete o[k];return o}
+function buildBatchLines(p,bqRows){
+  const r=p.row,Q=CFG.qp,errs=[],out=[];
+  const need=(v,what)=>{if(v===undefined||v===null||v==='')errs.push(what);return v};
+  for(const f of[['sb','business type'],['aac','affirmative action'],['pccr','previous contracts'],['adr','ADR'],['pkg','packaging'],['haz','hazmat'],['mat','material'],['mfg','manufacturer/dealer'],['cage','your CAGE']])need(Q[f[0]],'Settings: '+f[1]);
+  need(p.bid,'bid $/ea');need(p.bqDays,'delivery days');
+  const [offC,offP]=(p.bqOffer||'').split('|');const mfr=(p.bqMfr||offC||'').toUpperCase();
+  if(!p.bqEnd)errs.push('country of origin');else if(p.bqEnd!=='US')errs.push('foreign origin: quote this one on DIBBS directly');
+  if(Q.haz==='Y')errs.push('hazmat items: quote on DIBBS directly');
+  for(const sp of bqRows){
+    const a=Array.from({length:121},(_,i)=>sp[i+1]||'');const c=(n,v)=>{a[n-1]=v==null?'':String(v)};const g=n=>a[n-1];
+    c(6,Q.cage);c(7,Q.cage);c(13,Q.sb);c(21,Q.aac);c(22,Q.pccr);c(23,Q.adr);c(25,Q.disc||g(25)||'1');c(28,Q.pkg);
+    if(g(32)==='O'){c(33,need(Q.fobCity,'Settings: ship-from city'));c(34,Q.fobState);c(35,need(Q.fobCountry,'Settings: ship-from country'))}
+    if(g(36)==='O'){const ic=(p.bqInsp||mfr);need(ic,'origin inspection CAGE');c(37,ic);c(38,ic)}
+    c(50,p.bid!=null?(+p.bid).toFixed(2):'');c(51,p.bqDays!=null?Math.round(p.bqDays):'');
+    c(65,Q.haz);c(67,Q.mat);
+    if(p.bqEnd==='US')c(70,g(62)==='Y'?'US':'D');
+    c(102,Q.mfg);if(Q.mfg==='DD'||Q.mfg==='QD')c(103,need(mfr,'manufacturer CAGE'));
+    const idi=g(105);
+    if(['P','B','N'].includes(idi)){if(!offC)errs.push('offered part (approved CAGE/PN)');c(106,'1');c(107,offC||'');c(108,offP||'')}
+    if(['D','B','Q'].includes(idi))c(110,'1');
+    if(idi==='Q')errs.push('QPL item: quote on DIBBS directly');
+    if(g(117)&&g(117)!=='N'){c(118,need(Q.quality,'Settings: quality system'));if(Q.quality==='1'||Q.pkg==='N')c(24,'BW')}
+    else if(Q.pkg==='N')c(24,'BW');
+    out.push(a.map(v=>'"'+String(v).replace(/"/g,'')+'"').join(','));
+  }
+  return {lines:out,errs:[...new Set(errs)]};
+}
+$('#bqExport').onclick=async()=>{
+  const keys=[...SEL].filter(k=>pipe[k]);
+  if(!keys.length){modal('<div class="bar"><strong>Export DIBBS batch file</strong><button class="btn" id="mX">✕</button></div><p class="small">Tick the RFQs you\'re ready to quote using the boxes on the left, then click this again.</p>');$('#mX').onclick=closeModal;return}
+  const ok=[],bad=[];
+  for(const k of keys){const p=pipe[k],r=p.row,sh=(r[0].slice(-1)||'_').toUpperCase();
+    const bk=`${r[0]}:${r[2]}`,cr=(await loadBq(sh))[bk],rows=cr&&cr.map(c=>expandBqRow(bk,c));
+    if(daysLeft(r[8])<0){bad.push([r,['RFQ already closed']]);continue}
+    if(!rows){bad.push([r,['no DIBBS batch row yet (wait for the next daily run)']]);continue}
+    const res=buildBatchLines(p,rows);res.errs.length?bad.push([r,res.errs]):ok.push([r,res.lines])}
+  let url='';if(ok.length){const txt=ok.flatMap(x=>x[1]).join('\r\n')+'\r\n';url=URL.createObjectURL(new Blob([txt],{type:'text/plain'}))}
+  modal(`<div class="bar"><strong>Export DIBBS batch file</strong><button class="btn" id="mX">✕</button></div>
+  ${ok.length?`<p><b>${ok.length} RFQ${ok.length>1?'s':''} ready.</b> Download the file, then upload it on DIBBS under <b>Batch Quote Upload</b>. Review every quote on DIBBS before you submit.</p>
+  <a class="btn p" href="${url}" download="bidpilot-batch-${today}.txt">Download batch file</a>
+  <div class="small" style="margin-top:6px">${ok.map(([r])=>esc(r[0])).join(', ')}</div>`:'<p class="small">Nothing ready to export yet.</p>'}
+  ${bad.length?`<h3 style="font-size:14px;margin:14px 0 4px">Needs attention (${bad.length})</h3>${bad.map(([r,e])=>`<div class="qrow"><b>${esc(r[0])}</b> <span class="small">${esc(r[4])}</span><div class="small" style="color:var(--acc)">Missing: ${e.map(esc).join(' · ')}</div></div>`).join('')}`:''}`);
+  $('#mX').onclick=closeModal;
+};
+
 // ---------- settings ----------
+function qpSel(f,label,opts){return `<label>${label}</label><select id="qp_${f}"><option value="">Choose…</option>${opts.map(([v,t])=>`<option value="${v}" ${CFG.qp[f]===v?'selected':''}>${esc(t)}</option>`).join('')}</select>`}
 function cfgForm(){
   modal(`<div class="bar"><strong>Settings</strong><button class="btn" id="mX">✕</button></div>
   <label>Sync: private GitHub repo</label><input id="cRepo" placeholder="tier2rigging/bidpilot-data" value="${esc(CFG.repo)}">
   <label>Sync: GitHub token</label><input id="cTok" type="password" placeholder="github_pat_…" value="${esc(CFG.token)}">
   <div class="small">Fine-grained token with <b>Contents: Read and write</b> on that one repo only. It's stored in this browser only. Enter it once on each device.</div>
+  <label>Default target margin %</label><input id="cMt" type="number" step="1" value="${CFG.mtarget}">
+  <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">DIBBS batch quote: company answers</summary>
+  <div class="small" style="margin:6px 0">These are certifications you make on every quote. BidPilot never picks them for you, and the export won't run until each one is set. Use the same answers you give on DIBBS's web quote form.</div>
+  ${qpSel('sb','Business type (col 13)',[['A','A - Large/other business'],['B','B - Small business'],['M','M - Small disadvantaged business'],['C','C - Nonprofit']])}
+  ${qpSel('aac','Affirmative action compliance (col 21)',[['Y6','Y6 - Developed and on file'],['N6','N6 - Not developed and not on file'],['NH','NH - No previous contracts subject to requirements'],['NA','NA - Not applicable']])}
+  ${qpSel('pccr','Previous contracts & compliance reports (col 22)',[['Y4','Y4 - Participated and filed'],['Y5','Y5 - Participated and not filed'],['N4','N4 - Not participated'],['NA','NA - Not applicable']])}
+  ${qpSel('adr','Alternate disputes resolution (col 23)',[['A','A - Agree'],['B','B - Do not agree']])}
+  ${qpSel('pkg','Meets packaging requirement (col 28)',[['Y','Y - Yes'],['N','N - No (makes it Bid With Exception)']])}
+  ${qpSel('haz','Hazardous material / SDS (col 65)',[['N','N - No'],['Y','Y - Yes (finish on DIBBS)']])}
+  ${qpSel('mat','Material: new or other (col 67)',[['0','0 - New (not used/reconditioned/surplus)'],['1','1 - Used'],['2','2 - Reconditioned'],['3','3 - Remanufactured'],['4','4 - Unused former gov surplus']])}
+  ${qpSel('mfg','Manufacturer / dealer (col 102)',[['DD','DD - Dealer'],['MM','MM - Manufacturer']])}
+  ${qpSel('disc','Prompt payment terms (col 25)',[['1','1 - Net 30'],['10','10 - 2% 10 days'],['3','3 - 1/2% 20 days'],['6','6 - 1/2% 10 days'],['8','8 - 1/4% 20 days']])}
+  ${qpSel('quality','Your quality system, if an RFQ requires one (col 118)',[['1','1 - None (makes it Bid With Exception)'],['7','7 - ISO 9001:2015'],['8','8 - SAE AS9100'],['2','2 - Other equivalent']])}
+  <div class="row2"><div><label>Your CAGE (cols 6-7)</label><input id="qp_cage" value="${esc(CFG.qp.cage||'')}"></div><div><label>FOB Origin ship-from city</label><input id="qp_fobCity" value="${esc(CFG.qp.fobCity||'')}"></div></div>
+  <div class="row2"><div><label>Ship-from state</label><input id="qp_fobState" value="${esc(CFG.qp.fobState||'')}"></div><div><label>Ship-from country</label><input id="qp_fobCountry" value="${esc(CFG.qp.fobCountry||'')}"></div></div>
+  </details>
   <label>Email signature (used in RFQ drafts)</label><textarea id="cSig" rows="5">${esc(CFG.sig)}</textarea>
   <div style="display:flex;gap:6px;margin-top:10px"><button class="btn p" id="cSave">Save &amp; sync</button><button class="btn" id="cExp">Download backup</button></div>
   <div class="small" id="cMsg" style="margin-top:6px">${esc($('#syncBadge').title||'')}</div>`);
   $('#mX').onclick=closeModal;
-  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
+  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;CFG.mtarget=+$('#cMt').value||20;for(const f of['sb','aac','pccr','adr','pkg','haz','mat','mfg','disc','quality','cage','fobCity','fobState','fobCountry']){const el=$('#qp_'+f);if(el)CFG.qp[f]=el.value.trim()}store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
   $('#cExp').onclick=()=>{const b=new Blob([JSON.stringify(CRM,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-crm-${today}.json`;a.click()};
 }
 $('#cfgBtn').onclick=cfgForm;$('#syncBadge').onclick=cfgForm;
 $('#stPipe').onclick=()=>{$('#pipePane').classList.remove('hidden');$('#supPane').classList.add('hidden');$('#stPipe').classList.add('on');$('#stSup').classList.remove('on');renderPipe()};
 $('#stSup').onclick=()=>{$('#supPane').classList.remove('hidden');$('#pipePane').classList.add('hidden');$('#stSup').classList.add('on');$('#stPipe').classList.remove('on');renderSup()};
-$('#pipeCsv').onclick=()=>csv(Object.values(pipe).map(p=>{const r=p.row;const qs=Object.entries(p.quotes||{}).filter(([,q])=>q.price!=null).map(([id,q])=>`${(CRM.suppliers[id]||{}).name||id}: $${q.price}${q.lead?' / '+q.lead+'d':''}`).join('; ');return[p.status,r[8],r[0],fmtNsn(r[1]),r[4],r[5],p.vendor,p.cost,p.ship,p.bid,qs,p.notes]}),['Status','Return by','Solicitation','NSN','Item','Qty','Vendor','Vendor $/ea','Shipping','My bid $/ea','Quotes','Notes']);
+$('#pipeCsv').onclick=()=>csv(Object.values(pipe).map(p=>{const r=p.row;const qs=Object.entries(p.quotes||{}).filter(([,q])=>q.price!=null).map(([id,q])=>`${(CRM.suppliers[id]||{}).name||id}: $${q.price}${q.lead?' / '+q.lead+'d':''}`).join('; ');const bm=bidMath(p,r[5]||1);return[p.status,r[8],r[0],fmtNsn(r[1]),r[4],r[5],p.vendor,p.cost,p.ship,p.pack,p.labor,p.freight,p.other,bm.cost.toFixed(2),p.bid,p.bid?bm.margin.toFixed(1):'',qs,p.notes]}),['Status','Return by','Solicitation','NSN','Item','Qty','Supplier','Supplier $/ea','Inbound ship','Packaging','Labor','Outbound freight','Other','Total cost','My bid $/ea','Margin %','Quotes','Notes']);
 $('#tabFind').onclick=()=>{$('#findView').classList.remove('hidden');$('#pipeView').classList.add('hidden');$('#tabFind').classList.add('on');$('#tabPipe').classList.remove('on')};
 $('#tabPipe').onclick=()=>{$('#pipeView').classList.remove('hidden');$('#findView').classList.add('hidden');$('#tabPipe').classList.add('on');$('#tabFind').classList.remove('on');renderPipe();renderSup()};
 
