@@ -9,6 +9,10 @@ on:
         default: "5"
 permissions:
   contents: write
+# Only one run at a time; a new run waits for the current one instead of overlapping.
+concurrency:
+  group: dibbs-update
+  cancel-in-progress: false
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -30,5 +34,12 @@ jobs:
           git config user.name "bidpilot-bot"
           git config user.email "actions@users.noreply.github.com"
           git add -A data
-          git diff --cached --quiet || git commit -m "DIBBS update $(date -u +%F)"
-          git push
+          git diff --cached --quiet && exit 0
+          git commit -m "DIBBS update $(date -u +%F)"
+          # Catch up with anything pushed during the run (your uploads), keep this run's data on conflicts.
+          for i in 1 2 3; do
+            if git pull --rebase -X theirs origin main && git push; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep 10
+          done
+          exit 1
