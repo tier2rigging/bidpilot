@@ -7,6 +7,9 @@ on:
       days:
         description: "Days to pull (use 30 for first backfill)"
         default: "5"
+      backfill:
+        description: "Past-due check: also try this many older days of DIBBS files (0 = off, try 180 once)"
+        default: "0"
 permissions:
   contents: write
 # Only one run at a time; a new run waits for the current one instead of overlapping.
@@ -25,6 +28,14 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
         continue-on-error: true
       - run: node ingest/fetch.mjs --days ${{ github.event.inputs.days || '5' }}
+      - name: Keep past-due RFQs that DIBBS still shows Open
+        timeout-minutes: 35
+        run: node ingest/pastdue.mjs --minutes 25 --backfill ${{ github.event.inputs.backfill || '0' }}
+        continue-on-error: true
+      - name: Read procurement history from RFQ PDFs
+        timeout-minutes: 50
+        run: node ingest/history.mjs --minutes 40
+        continue-on-error: true
       - name: Collect awards
         timeout-minutes: 130
         run: node ingest/awards.mjs --days ${{ github.event.inputs.days == '30' && '30' || '7' }} --minutes 110
