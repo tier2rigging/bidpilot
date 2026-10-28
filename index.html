@@ -99,7 +99,7 @@ td.nom{white-space:normal;min-width:160px}
       <label>Set-aside</label>
       <div class="sachk" id="saBox"></div>
       <label>Tech data / sources (AMSC)</label>
-      <select id="amsc"><option value="">Any</option><option value="open">Open competition (G, Z, blank)</option><option value="restricted">Approved-source / restricted</option></select>
+      <select id="amsc"><option value="">Any</option><option value="Z">Commercial items: COTS (AMSC Z)</option><option value="open">Open competition (G, Z, blank)</option><option value="restricted">Approved-source / restricted</option></select>
       <label>Approved sources</label>
       <select id="asf"><option value="">Any</option><option value="none">None listed (anyone can supply)</option><option value="has">Has approved sources</option></select>
       <label>Approved-source CAGE(s)</label>
@@ -343,6 +343,12 @@ function runFind(){
   $('#fClr').onclick=()=>out.innerHTML='';
 }
 $('#fFindGo').onclick=runFind;$('#fFind').addEventListener('keydown',e=>{if(e.key==='Enter')runFind()});
+// AMSC dropdown: add every code present in today's data with its count.
+(function(){const c={};for(const r of D.rows)if(r[10])c[r[10]]=(c[r[10]]||0)+1;const sel=$('#amsc');
+  const z=sel.querySelector('option[value="Z"]');if(z)z.textContent=`Commercial items: COTS (AMSC Z) · ${(c.Z||0).toLocaleString()}`;
+  const og=document.createElement('optgroup');og.label='By AMSC code';
+  for(const[k,n]of Object.entries(c).sort((a,b)=>b[1]-a[1])){if(k==='Z')continue;const o=document.createElement('option');o.value=k;o.textContent=`${k}: ${AMSC[k]||'other'} · ${n.toLocaleString()}`;og.appendChild(o)}
+  if(og.children.length)sel.appendChild(og);})();
 function filt(skipFsc){
   const saSet=new Set([...document.querySelectorAll('#saBox input:checked')].map(i=>i.value)), posted=$('#posted').value, nl=nsnListSet(), hideSeen=$('#hideSeen').checked, fobF=$('#fobF').value, inspF=$('#inspF').value, hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, am=$('#amsc').value, ty=$('#type').value;
   const cl=+$('#close').value||0, ml=+$('#minleft').value||0, qmin=+$('#qmin').value||0, qmax=+$('#qmax').value||0;
@@ -364,6 +370,7 @@ function filt(skipFsc){
     if(!skipFsc && fscSel.size && !fscSel.has(r[3]))return false;
     if(fsg && (r[3]||'').slice(0,2)!==fsg)return false;
     if(saSet.size && !saSet.has(r[9]))return false;
+    if(am&&am.length===1&&r[10]!==am)return false;
     if(am==='open'&&!openAmsc(r[10]))return false;
     if(am==='restricted'&&openAmsc(r[10]))return false;
     if(ty && (r[11]||'M')!==ty)return false;
