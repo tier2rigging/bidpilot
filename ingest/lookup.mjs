@@ -62,7 +62,7 @@ async function statusFor(nsn) {
   let page = await get(u);
   let m = parseNsnSearch(page);
   if (!m.size) { page = await get(u.replace('Scope=all', 'Scope=')); m = parseNsnSearch(page); }
-  DBG.status = { n: m.size, sample: [...m].slice(0, 8), text: page.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 1500) };
+  DBG.status = { n: m.size, sample: [...m].slice(0, 8), text: page.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(-2500) };
   return m; // sol -> status
 }
 
@@ -72,7 +72,7 @@ async function awardsFor(nsn) {
     `${DIBBS}/Awards/AwdRecs.aspx?Category=nsn&TypeSrch=cq&Value=${nsn.slice(0, 4)}-${nsn.slice(4, 6)}-${nsn.slice(6, 9)}-${nsn.slice(9)}`,
   ];
   for (const u of tries) {
-    try { const html = await get(u); const p = parseAwardPage(html); (DBG.awards = DBG.awards || []).push({ u, rows: p.rows.length, total: p.total, text: html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 800) }); const r = p.rows.filter((x) => !x.nsn || x.nsn === nsn); if (r.length) return r.slice(0, 25); } catch (e) { (DBG.awards = DBG.awards || []).push({ u, err: e.message }); }
+    try { const html = await get(u); const p = parseAwardPage(html); (DBG.awards = DBG.awards || []).push({ u, rows: p.rows.length, total: p.total, text: html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(-1500) }); const r = p.rows.filter((x) => !x.nsn || x.nsn === nsn); if (r.length) return r.slice(0, 25); } catch (e) { (DBG.awards = DBG.awards || []).push({ u, err: e.message }); }
   }
   return [];
 }
