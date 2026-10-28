@@ -81,6 +81,7 @@ td.nom{white-space:normal;min-width:160px}
     <div class="card">
       <label>Search</label>
       <input id="q" placeholder="NSN, solicitation, item name…">
+      <div id="lkBox"></div>
       <label>NSN / part number list</label>
       <textarea id="nsnList" rows="2" placeholder="Paste NSNs or part numbers, one per line or comma-separated"></textarea>
       <div class="small" id="nsnListN"></div>
@@ -263,6 +264,9 @@ const CFG=Object.assign({repo:'',token:'',sig:'Tier2 Rigging LLC\nCAGE: 175A8\nM
 CFG.qp=Object.assign({cage:'175A8',disc:'1',mfg:'DD',fobCity:'Manorville',fobState:'NY',fobCountry:'US'},CFG.qp||{});
 let CRM=store.get('bp_crm',null)||{pipeline:store.get('t2_pipe',{}),suppliers:{},deleted:{}};
 CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.orders=CRM.orders||{};CRM.viewed=CRM.viewed||{};CRM.views=CRM.views||{};CRM.deleted=CRM.deleted||{};
+const pickSettings=()=>({saved:CFG.settingsSaved||'',sig:CFG.sig,tpl:CFG.tpl,mtarget:CFG.mtarget,qp:{...CFG.qp}});
+if(!CRM.settings)CRM.settings=pickSettings();
+function applySettings(){const st=CRM.settings;if(!st||!st.saved||(st.saved<=(CFG.settingsSaved||'')))return;if(st.sig!=null)CFG.sig=st.sig;if(st.tpl)CFG.tpl=st.tpl;if(st.mtarget)CFG.mtarget=st.mtarget;if(st.qp)CFG.qp=Object.assign({},CFG.qp,st.qp);CFG.settingsSaved=st.saved;store.set('bp_cfg',CFG)}
 let pipe=CRM.pipeline;
 const nowIso=()=>new Date().toISOString();
 function canon(o){return JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v)}
@@ -278,6 +282,7 @@ function mergeCRM(a,b){
       const del=out.deleted[pre+id];if(w&&!(del&&del>=(w.saved||'')))out[col][id]=w;
     }
   }
+  const sa=a.settings,sb=b.settings;out.settings=!sa?(sb||null):!sb?sa:((sb.saved||'')>(sa.saved||'')?sb:sa);
   return out;
 }
 const b64e=s=>btoa(unescape(encodeURIComponent(s))), b64d=s=>decodeURIComponent(escape(atob(s.replace(/\s/g,''))));
@@ -298,13 +303,13 @@ async function sync(){
       else if(g.status!==404)throw new Error(g.status===401?'bad token':g.status===404?'repo not found':'GitHub '+g.status);
       const merged=mergeCRM(remote,CRM);
       CRM=merged;pipe=CRM.pipeline;store.set('bp_crm',CRM);
-      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},orders:remote.orders||{},viewed:remote.viewed||{},views:remote.views||{},deleted:remote.deleted||{}}))break;
+      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},orders:remote.orders||{},viewed:remote.viewed||{},views:remote.views||{},deleted:remote.deleted||{},settings:remote.settings||null}))break;
       const p=await gh('PUT',{message:'BidPilot CRM update',content:b64e(JSON.stringify(merged,null,1)),...(sha?{sha}:{})});
       if(p.status===409||p.status===422)continue;
       if(!p.ok)throw new Error(p.status===403||p.status===404?'token needs Contents read/write on this repo':'GitHub '+p.status);
       break;
     }
-    syncBadge('Synced ✓','ok');refreshViews();
+    applySettings();syncBadge('Synced ✓','ok');refreshViews();
   }catch(e){syncBadge('Sync error','err');$('#syncBadge').title=e.message}
   finally{syncing=false}
 }
@@ -715,14 +720,21 @@ async function nsnAwards(r){
   const el=$('#nsnAw'), f=/^\d{13}$/.test(r[1])?r[1].slice(0,4):'other';
   const list=(await loadAwards(f)).filter(a=>a[8]===r[1]).sort((a,b)=>(b[6]||'').localeCompare(a[6]||''));
   const asC=new Set((r[15]||[]).map(a=>a[0]));
-  const hrows=((await loadHist(f))[r[1]])||null;
+  const P=pipe[key(r)]||{},L=P.lk;
+  // Looked-up RFQs saved before contract details existed: fetch them once from the saved lookup.
+  if(L&&!L.contracts){try{const x=await lkFetch(L.q);if(x){L.contracts=x.contracts||{};if(!(L.history||[]).length)L.history=x.history||[];crmSave()}}catch{}}
+  let hrows=((await loadHist(f))[r[1]])||null;
+  if(!(hrows&&hrows.length)&&L&&(L.history||[]).length)hrows=L.history;
   renderRfqHist(r,hrows);
+  const CT=(L&&L.contracts)||{};
+  const cancelled=c=>{const C=CT[String(c||'').replace(/P\d{5}$/,'')];return !!C&&(C.mods||[]).some(m=>/CANCEL|TERMINAT/i.test(m.type||''))};
   let priced=list.find(a=>a[15]>0&&a[5]!==0);
-  const h0=hrows&&hrows.find(x=>x[3]>0);
+  const skipped=hrows?hrows.filter(x=>x[3]>0&&cancelled(x[1])):[];
+  const h0=hrows&&hrows.find(x=>x[3]>0&&!cancelled(x[1]));
   if(h0&&(!priced||h0[4]>priced[6]))priced=[null,null,null,null,h0[0],null,h0[4],null,null,null,null,null,null,h0[2],'',h0[3]];
   const btn=$('#lastAw');
   if(priced){const yrs=(new Date(today)-new Date(priced[6]))/3.156e10, bid=priced[15]*Math.pow(1.03,Math.max(0,yrs));
-    $('#lastAwNote').textContent=`Last procurement $${priced[15].toFixed(2)}/ea on ${priced[6]} (CAGE ${priced[4]}).${yrs>=1?` That's ${yrs.toFixed(1)} years ago, so the +3%/yr adjustment matters.`:''}`;
+    $('#lastAwNote').textContent=`Last procurement $${priced[15].toFixed(2)}/ea on ${priced[6]} (CAGE ${priced[4]}).${yrs>=1?` That's ${yrs.toFixed(1)} years ago, so the +3%/yr adjustment matters.`:''}${skipped.length?` Skipped cancelled: ${skipped.map(x=>`$${x[3]} (${x[0]})`).join(', ')}.`:''}`;
     DR_PTW=bid;btn.onclick=()=>{$('#pb2').value=bid.toFixed(2);mcalc()};mcalc()}
   else{btn.disabled=true;$('#lastAwNote').textContent='No priced award collected yet for this NSN.'}
   if(!list.length){el.textContent='No awards collected for this NSN yet. History builds from the first daily run onward.';return}
@@ -898,27 +910,83 @@ function readerModal(forRow){
   $('#rdFile').onchange=e=>{const f=e.target.files[0];if(f)readPdf(f,forRow)};
 }
 function closeReader(){$('#modalBox').classList.remove('wide');$('#modalBg').classList.add('hidden')}
-async function readPdf(file,forRow){
+async function readPdf(file,forRow,lk){
   const out=$('#rdOut');out.innerHTML='<div class="small">Reading…</div>';
   try{
     const lib=await loadPdfJs();
-    const lines=await RfqReader.pdfToLines(lib,new Uint8Array(await file.arrayBuffer()));
+    const lines=await RfqReader.pdfToLines(lib,file.bytes||new Uint8Array(await file.arrayBuffer()));
     const res=RfqReader.parse(lines);
     if(!res.header.solicitation&&!res.items.length){out.innerHTML='<div class="small">This doesn\'t look like a DLA RFQ (no solicitation number or line items found). If it\'s a scanned PDF, it can\'t be read as text.</div>';return}
     res.file=file.name;res.read=nowIso();
     const row=matchRow(res)||forRow;
-    out.innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="btn p" id="rdSave">${row?'Save to this RFQ in my pipeline':'Add to my pipeline'}</button><button class="btn" id="rdCopy">Copy as text</button><button class="btn" id="rdPrint">Print / save PDF</button>${row?'<button class="btn" id="rdOpen">Open the RFQ</button>':''}</div>${forRow&&res.header.solicitation&&res.header.solicitation.replace(/-/g,'')!==forRow[0]?`<div class="tag t-warn" style="margin-bottom:8px">Heads up: this PDF is ${esc(res.header.solicitation)}, not ${esc(forRow[0])}.</div>`:''}${reqSheet(res)}`;
-    if(row){$('#rdSave').onclick=()=>{const k=key(row);pipe[k]={...(pipe[k]||{status:'Watching',row}),req:res,saved:nowIso()};autoSuppliers(row);crmSave();pipeCount();renderTable();$('#rdSave').textContent='Saved ✓'};
+    const lkTop=lk?`<div class="small" style="margin-bottom:8px">DIBBS status: ${lkTag(lk.status)} · looked up ${esc((lk.at||'').slice(0,10))}${lk.history&&lk.history.length?` · last buy ${esc(lk.history[0][4])} @ $${lk.history[0][3]}`:''}</div>`:'';
+    out.innerHTML=lkTop+`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="btn p" id="rdSave">${row?'Save to this RFQ in my pipeline':'Add to my pipeline'}</button><button class="btn" id="rdCopy">Copy as text</button><button class="btn" id="rdPrint">Print / save PDF</button>${row?'<button class="btn" id="rdOpen">Open the RFQ</button>':''}</div>${forRow&&res.header.solicitation&&res.header.solicitation.replace(/-/g,'')!==forRow[0]?`<div class="tag t-warn" style="margin-bottom:8px">Heads up: this PDF is ${esc(res.header.solicitation)}, not ${esc(forRow[0])}.</div>`:''}${reqSheet(res)}`;
+    if(row){$('#rdSave').onclick=()=>{const k=key(row);pipe[k]={...(pipe[k]||{status:'Watching',row}),req:res,...(lk?{lk}:{}),saved:nowIso()};autoSuppliers(row);crmSave();pipeCount();renderTable();$('#rdSave').textContent='Saved ✓'};
       $('#rdOpen').onclick=()=>{closeReader();openDrawer(row)}}else{const rows=rowsFromReq(res).filter(r=>r[0]);
       if(!rows.length)$('#rdSave').disabled=true;
       else{$('#rdOut').insertAdjacentHTML('afterbegin',`<div class="tag t-warn" style="margin-bottom:8px;display:inline-block">${esc(res.header.solicitation||'')} isn't in BidPilot's open list${res.header.returnBy&&daysLeft(res.header.returnBy)<0?' (its return-by date has passed, but DLA can keep it open and ask for updated quotes)':''}. Add it to your pipeline to track it.</div>`);
-      $('#rdSave').onclick=()=>{let last;for(const r of rows){const k=key(r);pipe[k]={...(pipe[k]||{status:'Watching'}),row:r,manual:true,req:res,saved:nowIso()};autoSuppliers(r);last=r}crmSave();pipeCount();$('#rdSave').textContent=`Added ${rows.length} line${rows.length>1?'s':''} ✓`;$('#rdSave').disabled=true;
+      $('#rdSave').onclick=()=>{let last;for(const r of rows){const k=key(r);pipe[k]={...(pipe[k]||{status:'Watching'}),row:r,manual:true,req:res,...(lk?{lk}:{}),saved:nowIso()};autoSuppliers(r);last=r}crmSave();pipeCount();$('#rdSave').textContent=`Added ${rows.length} line${rows.length>1?'s':''} ✓`;$('#rdSave').disabled=true;
         $('#rdSave').insertAdjacentHTML('afterend',' <button class="btn" id="rdOpen2">Open it</button>');$('#rdOpen2').onclick=()=>{closeReader();openDrawer(last)}}}}
     $('#rdCopy').onclick=()=>{navigator.clipboard.writeText(RfqReader.toText(res)).then(()=>$('#rdCopy').textContent='Copied ✓',()=>alert('Copy failed'))};
     $('#rdPrint').onclick=()=>printReq(res);
   }catch(e){out.innerHTML=`<div class="small">Couldn't read that PDF: ${esc(e.message||String(e))}</div>`}
 }
 
+// ---------- DIBBS lookup (any solicitation or NSN, open or closed; runs as a GitHub Action) ----------
+const LK_REPO='tier2rigging/bidpilot';
+const lkNorm=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+const lkOk=q=>/^SP[A-Z0-9]{4}\d{2}[A-Z][A-Z0-9]{4}$/.test(q)||/^\d{13}$/.test(q);
+function lkTag(st){const L={Listed:['t-ok','Active on DIBBS','DIBBS still lists this solicitation for the NSN, so it is still open for quotes'],'Not listed':['t-warn','Not listed','No longer listed on DIBBS: likely awarded, cancelled or archived. Confirm before quoting']}[st]||['','status unknown',''];return `<span class="tag ${L[0]}" title="${esc(L[2])}">${esc(L[1])}</span>`}
+function lkRow(r,x){return [x.sol,r.nsn||'',x.pr||'',(r.nsn||'').slice(0,4),r.nom||'',x.qty??null,'',x.issue||'',x.ret||'','',r.amsc||'','','',null,(x.file||x.sol+'.pdf'),(r.as||[]).map(a=>[a[0],a[1]]),'']}
+function lkButton(){const q=lkNorm($('#q').value);$('#lkBox').innerHTML=lkOk(q)?`<button class="btn" id="lkGo" style="margin-top:6px;width:100%">🔎 Look up ${esc(q)} on DIBBS (open or closed)</button>`:'';const b=$('#lkGo');if(b)b.onclick=()=>lookup(q)}
+$('#q').addEventListener('input',lkButton);
+async function lkFetch(q){
+  const r=await fetch(`https://api.github.com/repos/${LK_REPO}/contents/data/lookup/${q}.json?t=${Date.now()}`,{cache:'no-store',headers:{Accept:'application/vnd.github.raw',}});
+  if(r.status===404)return null;if(!r.ok)throw new Error('GitHub '+r.status);return r.json()}
+function lkWait(q,msg){modal(`<div class="bar"><strong>Lookup ${esc(q)}</strong><button class="btn" id="lkX">✕</button></div><div class="small" id="lkMsg">${msg}</div>`);$('#lkX').onclick=closeModal}
+let lkRun=0;
+async function lookup(q,force){
+  const run=++lkRun;lkWait(q,'Checking…');
+  try{
+    if(!force){const ex=await lkFetch(q);if(run!==lkRun)return;if(ex){showLookup(ex,true);return}}
+    const LKT=CFG.lkToken||CFG.token;if(!LKT){$('#lkMsg').innerHTML='Add a DIBBS lookup token in ⚙ Settings first (GitHub fine-grained token with Actions: Read and write on tier2rigging/bidpilot).';return}
+    const since=new Date(Date.now()-90e3).toISOString();
+    const d=await fetch(`https://api.github.com/repos/${LK_REPO}/actions/workflows/lookup.yml/dispatches`,{method:'POST',headers:{Authorization:'Bearer '+LKT,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify({ref:'main',inputs:{q}})});
+    if(d.status!==204)throw new Error(d.status===403||d.status===404?'Your GitHub token needs Actions: Read and write on tier2rigging/bidpilot. Edit the token on GitHub (Settings → Developer settings → Fine-grained tokens), add that repo and permission, then try again.':d.status===401?'GitHub token is invalid or expired.':'GitHub '+d.status);
+    const t0=Date.now();
+    while(Date.now()-t0<7*60e3){
+      if(run!==lkRun||$('#modalBg').classList.contains('hidden'))return;
+      const s=Math.round((Date.now()-t0)/1000);const m=$('#lkMsg');if(m)m.textContent=`Pulling ${q} from DIBBS… ${s}s (usually 1–2 minutes). You can close this and click Look up again later.`;
+      await new Promise(r=>setTimeout(r,8000));
+      const r=await lkFetch(q).catch(()=>null);
+      if(r&&(r.at||'')>since){if(run===lkRun)showLookup(r);return}
+    }
+    $('#lkMsg').textContent='Still running. Close this and click Look up again in a minute.';
+  }catch(e){const m=$('#lkMsg');if(m)m.textContent='Lookup failed: '+(e.message||e)}
+}
+function lkBytes(b64){const s=atob(b64),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u}
+function showLookup(r,cached){
+  const sols=r.sols||[],H=r.history||[],A=r.awards||[];
+  modal(`<div class="bar" style="display:flex;justify-content:space-between;align-items:center"><strong>Lookup ${esc(r.q)}</strong><span><button class="btn" id="lkRe">↻ Refresh from DIBBS</button> <button class="btn" id="lkX">✕</button></span></div>
+  <div class="small" style="margin:4px 0 8px">${r.nsn?`NSN <b>${esc(fmtNsn(r.nsn))}</b> · `:''}${r.nom?`${esc(r.nom)} · `:''}${r.amsc?`AMSC ${esc(r.amsc)} · `:''}Pulled ${esc((r.at||'').slice(0,16).replace('T',' '))} UTC${cached?' (saved result)':''}</div>
+  ${(r.errors||[]).length?`<div class="small" style="color:var(--warn,#b45309)">Couldn't get everything: ${esc(r.errors.join('; '))}</div>`:''}
+  <h3 style="font-size:15px;margin:10px 0 4px">Solicitations</h3>
+  ${sols.length?`<table class="aw"><tbody><tr class="small"><td>Solicitation</td><td>Status</td><td>PR</td><td>Qty</td><td>Issued</td><td>Return by</td><td></td></tr>${sols.map((x,i)=>{const inP=pipe[key(lkRow(r,x))];return `<tr><td>${esc(x.sol)}</td><td>${lkTag(x.status)}</td><td>${esc(x.pr||'')}</td><td>${x.qty??''}</td><td>${esc(x.issue||'')}</td><td>${esc(x.ret||'')}</td><td style="white-space:nowrap">${x.pdf?`<button class="btn p lkOpen" data-i="${i}" title="Read the RFQ PDF requirements and save">Open &amp; save</button>`:`<button class="btn lkSave" data-i="${i}">${inP?'Saved ✓':'Save'}</button> <a class="btn" target="_blank" rel="noopener" href="${FILES}/Downloads/RFQ/${esc(x.sol.slice(-1))}/${esc(x.sol)}.PDF">RFQ PDF</a>`}</td></tr>`}).join('')}</tbody></table>`:'<div class="small">No solicitations found.</div>'}
+  ${(r.as||[]).length?`<h3 style="font-size:15px;margin:12px 0 4px">Approved sources</h3><table class="aw"><tbody>${r.as.map(a=>`<tr><td>${esc(a[0])}</td><td>${esc(a[1])}</td><td>${esc(a[2]||'')}</td></tr>`).join('')}</tbody></table>`:''}
+  <h3 style="font-size:15px;margin:12px 0 4px">Procurement history</h3>
+  ${H.length?`<table class="aw"><tbody><tr class="small"><td>CAGE</td><td>Contract</td><td>Qty</td><td>Unit $</td><td>Date</td></tr>${H.slice(0,15).map(h=>{const C=(r.contracts||{})[h[1].replace(/P\d{5}$/,'')];const mods=C?(C.mods||[]).filter(m=>m.mod&&m.mod!=='0'):[];const bad=mods.some(m=>/CANCEL|TERMINAT/i.test(m.type||''));
+    return `<tr><td>${esc(h[0])}${C&&C.recipient?`<br><span class="small">${esc(C.recipient)}</span>`:''}</td><td>${C?`<a target="_blank" rel="noopener" href="${esc(C.url)}" title="Open the contract record on USAspending">${esc(h[1])}</a>`:esc(h[1])}${bad?' <span class="tag t-warn">cancelled</span>':''}${C&&C.sol?`<br><span class="small">from <a href="#" class="lkSol" data-s="${esc(C.sol)}" title="Look up this solicitation">${esc(C.sol)}</a></span>`:''}${mods.map(m=>`<br><span class="small">${esc(m.mod)} · ${esc(m.date)} · ${esc((m.type||'').toLowerCase())}${m.amount?` · ${m.amount<0?'−':''}$${Math.abs(m.amount).toLocaleString()}`:''}</span>`).join('')}</td><td>${h[2]}</td><td>$${h[3]}</td><td>${esc(h[4])}</td></tr>`}).join('')}</tbody></table>`:'<div class="small">None in the RFQ PDF.</div>'}
+  <h3 style="font-size:15px;margin:12px 0 4px">Recent awards</h3>
+  ${A.length?`<table class="aw"><tbody><tr class="small"><td>Awarded</td><td>Contract</td><td>CAGE</td><td>Total</td></tr>${A.slice(0,15).map(a=>`<tr><td>${esc(a.awardDate)}</td><td>${a.pdf?`<a target="_blank" rel="noopener" href="${esc(a.pdf)}">${esc(a.contract)}</a>`:esc(a.contract)}</td><td>${esc(a.cage)}</td><td>${a.total!=null?'$'+a.total.toLocaleString():''}</td></tr>`).join('')}</tbody></table>`:'<div class="small">None found.</div>'}`);
+  $('#modalBox').classList.add('wide');
+  $('#lkX').onclick=closeModal;$('#lkRe').onclick=()=>lookup(r.q,true);
+  document.querySelectorAll('.lkSol').forEach(x=>x.onclick=e=>{e.preventDefault();lookup(lkNorm(x.dataset.s))});
+  document.querySelectorAll('.lkOpen').forEach(b=>b.onclick=()=>{const x=sols[+b.dataset.i];
+    const lk={q:r.q,sol:x.sol,status:x.status,at:r.at,history:H.slice(0,15),awards:A.slice(0,15),contracts:r.contracts||{}};
+    readerModal(null);readPdf({bytes:lkBytes(x.pdf),name:x.file||x.sol+'.PDF'},null,lk)});
+  document.querySelectorAll('.lkSave').forEach(b=>b.onclick=()=>{const x=sols[+b.dataset.i],row=lkRow(r,x),k=key(row);
+    pipe[k]={...(pipe[k]||{status:'Watching'}),row,manual:true,lk:{q:r.q,sol:x.sol,status:x.status,at:r.at,history:H.slice(0,15),awards:A.slice(0,15),contracts:r.contracts||{}},saved:nowIso()};autoSuppliers(row);crmSave();pipeCount();renderTable();b.textContent='Saved ✓'});
+}
 function closeModal(){$('#modalBg').classList.add('hidden')}
 $('#modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};
 function supForm(s,after){
@@ -1121,6 +1189,8 @@ function cfgForm(){
   ${SERVER?`<div class="small" style="margin:6px 0 10px">Workspace: <b>${esc(SERVER.workspace.name)}</b> · signed in as ${esc(SERVER.email)}. Your data syncs automatically, and these settings follow you to any device.</div><input id="cRepo" type="hidden" value=""><input id="cTok" type="hidden" value="">`:`<label>Sync: private GitHub repo</label><input id="cRepo" placeholder="tier2rigging/bidpilot-data" value="${esc(CFG.repo||'')}">
   <label>Sync: GitHub token</label><input id="cTok" type="password" placeholder="github_pat_…" value="${esc(CFG.token||'')}">
   <div class="small">Fine-grained token with <b>Contents: Read and write</b> on that one repo only. It's stored in this browser only. Enter it once on each device.</div>`}
+  <label>DIBBS lookup token (optional)</label><input id="cLkTok" type="password" placeholder="github_pat_… (Actions: Read and write on tier2rigging/bidpilot)" value="${esc(CFG.lkToken||'')}">
+  <div class="small">Lets 🔎 Look up pull any solicitation or NSN from DIBBS. Leave blank to use the sync token. Stored in this browser only.</div>
   <label>Default target margin %</label><input id="cMt" type="number" step="1" value="${CFG.mtarget}">
   <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">DIBBS batch quote: company answers</summary>
   <div class="small" style="margin:6px 0">These are certifications you make on every quote. BidPilot never picks them for you, and the export won't run until each one is set. Use the same answers you give on DIBBS's web quote form.</div>
@@ -1149,7 +1219,7 @@ function cfgForm(){
   <div class="small" id="cMsg" style="margin-top:6px">${esc($('#syncBadge').title||'')}</div>`);
   if(SERVER&&!CAN_CO){document.querySelectorAll('#modalBox [id^="qp_"]').forEach(x=>x.disabled=true);const d=$('#modalBox details');if(d)d.insertAdjacentHTML('beforeend','<div class="small" style="margin-top:6px">Set by your workspace owner. Shared by everyone in '+esc(SERVER.workspace.name)+'.</div>')}
   $('#mX').onclick=closeModal;
-  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;CFG.tpl={subject1:$('#tS1').value,subjectN:$('#tSN').value,body:$('#tBody').value};CFG.mtarget=+$('#cMt').value||20;for(const f of['sb','aac','pccr','adr','pkg','haz','mat','mfg','disc','quality','cage','fobCity','fobState','fobCountry']){const el=$('#qp_'+f);if(el)CFG.qp[f]=el.value.trim()}if(SERVER){delete CFG.repo;delete CFG.token;await saveServerSettings()}store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
+  $('#cSave').onclick=async()=>{const wasLinked=!!(CFG.repo&&CFG.token);CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.lkToken=($('#cLkTok')?$('#cLkTok').value.trim():'');if(!SERVER&&!wasLinked&&CFG.repo&&CFG.token){store.set('bp_cfg',CFG);$('#cMsg').textContent='Connecting…';await sync();const bad=$('#syncBadge').classList.contains('err');$('#cMsg').textContent=bad?'Sync failed: '+$('#syncBadge').title:'Connected ✓ — pulled your settings from the other computer. Close and reopen Settings to see them.';return}CFG.sig=$('#cSig').value;CFG.tpl={subject1:$('#tS1').value,subjectN:$('#tSN').value,body:$('#tBody').value};CFG.mtarget=+$('#cMt').value||20;for(const f of['sb','aac','pccr','adr','pkg','haz','mat','mfg','disc','quality','cage','fobCity','fobState','fobCountry']){const el=$('#qp_'+f);if(el)CFG.qp[f]=el.value.trim()}if(SERVER){delete CFG.repo;delete CFG.token;await saveServerSettings()}store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
   $('#tReset').onclick=()=>{$('#tS1').value=DEF_TPL.subject1;$('#tSN').value=DEF_TPL.subjectN;$('#tBody').value=DEF_TPL.body};
   $('#cExp').onclick=()=>{const b=new Blob([JSON.stringify(CRM,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-crm-${today}.json`;a.click()};
 }
