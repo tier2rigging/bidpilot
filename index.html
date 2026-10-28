@@ -292,8 +292,10 @@ const histRead=r=>!!(HS[r[1]]||sumOf(r));
 // little competition history. DIBBS doesn't publish who quoted, so "not bid on" is judged from
 // procurement history (never bought / not bought in years / no repeat winner).
 function sugOf(r){
-  if(pipe[key(r)]||r[17])return null;
-  const dl=daysLeft(r[8]);if(dl!==null&&dl<3)return null;
+  if(pipe[key(r)])return null;
+  const pd=!!r[17];                            // past due but DIBBS still showed it Open
+  if(pd&&-daysLeft(r[17])>7)return null;       // only if confirmed Open in the last week
+  const dl=daysLeft(r[8]);if(!pd&&dl!==null&&dl<3)return null;
   const as=r[15]||[],z=r[10]==='Z';
   if(!openAmsc(r[10]))return null;            // tech data restricted: skip
   if(!z&&!as.length)return null;              // need a commercial item or a named part to buy
@@ -310,6 +312,7 @@ function sugOf(r){
   if(r[12]==='O'){sc+=4;why.push('FOB origin')}
   if(r[16]==='D'){sc+=4;why.push('Dest. inspection')}
   if(r[7]&&-daysLeft(r[7])<=1){sc+=5;why.push('New')}
+  if(pd){sc+=6;why.unshift('Past due · still Open')}
   if(!seen(r))sc+=2;
   return sc>=45?{sc,why}:null;
 }
@@ -544,7 +547,7 @@ $('#vtabs').onclick=e=>{
   if(e.target.closest('#vSave')){const name=prompt('Name this view (e.g. "My FSCs · small business · closing 7 days")');if(!name)return;const id='w'+Date.now().toString(36);CRM.views[id]={name:name.trim(),f:captureView(),order:Date.now(),saved:nowIso()};crmSave();curView=id;renderViews();return}
   if(e.target.closest('#vUpd')){const v=CRM.views[curView];if(v){v.f=captureView();v.saved=nowIso();crmSave();renderViews()}return}
   const t=e.target.closest('[data-v]');if(!t)return;curView=t.dataset.v;
-  if(curView==='sugg'){$('#reset').click();curView='sugg';sugRefresh();renderViews();run();return}
+  if(curView==='sugg'){$('#reset').click();curView='sugg';loadPastDue();sugRefresh();renderViews();run();return}
   if(curView==='')$('#reset').click();else applyView(CRM.views[curView].f);renderViews();
 };
 // ---------- Find FSCs: match a plain-English description against FSC names and open RFQ item names ----------
@@ -586,7 +589,7 @@ function filt(skipFsc){
   const pdF=$('#pdF').value;
   return D.rows.filter(r=>{
     const as=r[15]||[];
-    if(pdF===''&&r[17])return false;
+    if(pdF===''&&r[17]&&curView!=='sugg')return false;
     if(pdF==='pd'&&!r[17])return false;
     if(q && !(`${r[0]} ${r[1]} ${r[4]} ${r[2]} ${as.map(a=>a.join(' ')).join(' ')}`.toLowerCase().replace(/-/g,'').includes(q)))return false;
     if(hideSeen && seen(r))return false;
@@ -619,11 +622,11 @@ function filt(skipFsc){
   });
 }
 let PD_STATE=0; // 0 not loaded, 1 loading, 2 loaded
-window.PASTDUE_LOAD=d=>{const have=new Set(D.rows.map(key));let n=0;for(const r of d.rows||[]){if(have.has(key(r)))continue;D.rows.push(r);n++}PD_STATE=2;PD_N=n;const o=$('#pdF option[value="pd"]');if(o)o.textContent=`Past due, still Open on DIBBS (${n.toLocaleString()})`;run()};
+window.PASTDUE_LOAD=d=>{const have=new Set(D.rows.map(key));let n=0;for(const r of d.rows||[]){if(have.has(key(r)))continue;D.rows.push(r);n++}PD_STATE=2;PD_N=n;sugRefresh();renderViews();const o=$('#pdF option[value="pd"]');if(o)o.textContent=`Past due, still Open on DIBBS (${n.toLocaleString()})`;run()};
 let PD_N=0;
 function loadPastDue(){if(PD_STATE)return;PD_STATE=1;const s=document.createElement('script');s.src='data/pastdue.js?'+Date.now().toString(36).slice(0,-4);s.onerror=()=>{PD_STATE=2;const o=$('#pdF option[value="pd"]');if(o)o.textContent='Past due (not built yet: runs with the daily job)';run()};document.head.appendChild(s)}
 function run(){
-  if($('#pdF').value&&!PD_STATE)loadPastDue();
+  if(($('#pdF').value||curView==='sugg')&&!PD_STATE)loadPastDue();
   filtered=filt(false);
   if(curView==='sugg'){filtered=filtered.filter(r=>SUG.has(key(r)));filtered.sort((a,b)=>SUG.get(key(b)).sc-SUG.get(key(a)).sc||(a[8]||'').localeCompare(b[8]||''))}
   else filtered.sort((a,b)=>{let x=a[sortK],y=b[sortK];if(sortK===15){x=(x||[]).length;y=(y||[]).length}if(sortK===16){x=(lastAw(a)||{}).unit||0;y=(lastAw(b)||{}).unit||0}return (typeof x==='number'||typeof y==='number'?(x||0)-(y||0):String(x||'').localeCompare(String(y||'')))*sortDir});
