@@ -35,6 +35,9 @@ tbody tr{cursor:pointer}tbody tr:hover{background:var(--bg)}
 #tb tr.seen td{color:var(--mute)}#tb tr.seen td:first-child{box-shadow:inset 3px 0 0 transparent}#tb tr.new td:first-child{box-shadow:inset 3px 0 0 #2f6fed}
 .vtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.vtab{border:1px solid var(--line);background:var(--bg);border-radius:16px;padding:4px 10px;font-size:13px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}.vtab.on{background:var(--ink);color:var(--card);border-color:var(--ink)}.vtab b{font-weight:400;opacity:.6}.vtab b:hover{opacity:1}
 .sachk{display:flex;flex-wrap:wrap;gap:4px 10px}.sachk label{display:flex;gap:4px;align-items:center;text-transform:none;font-size:12.5px;font-weight:400;color:var(--ink);margin:0}.sachk input{width:auto}
+.fres{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:6px}
+.fres label{display:flex;gap:8px;align-items:flex-start;text-transform:none;font-size:12.5px;font-weight:400;color:var(--ink);margin:0;padding:6px 8px;border-bottom:1px solid var(--line)}
+.fres input{width:auto;margin-top:2px}.fres .ex{color:var(--mute);font-size:11.5px}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#2f6fed;margin-right:6px;vertical-align:middle}
 td.nom{white-space:normal;min-width:160px}
 .tw{overflow:auto;max-height:calc(100vh - 190px)}
@@ -80,6 +83,9 @@ td.nom{white-space:normal;min-width:160px}
       <label>NSN / part number list</label>
       <textarea id="nsnList" rows="2" placeholder="Paste NSNs or part numbers, one per line or comma-separated"></textarea>
       <div class="small" id="nsnListN"></div>
+      <label>Find FSCs for what you sell</label>
+      <div style="display:flex;gap:6px"><input id="fFind" placeholder="e.g. cargo slings, webbing, tie-down straps"><button class="btn p" id="fFindGo">Find</button></div>
+      <div id="fFindOut"></div>
       <label>Add FSC (any of all 666)</label>
       <input id="fscIn" list="fscOpts" placeholder="Type code or name, e.g. 1670 or parachute">
       <datalist id="fscOpts"></datalist>
@@ -308,6 +314,33 @@ $('#vtabs').onclick=e=>{
   const t=e.target.closest('[data-v]');if(!t)return;curView=t.dataset.v;
   if(curView==='')$('#reset').click();else applyView(CRM.views[curView].f);renderViews();
 };
+// ---------- Find FSCs: match a plain-English description against FSC names and open RFQ item names ----------
+const SYN={sling:['rigging','hoist','lifting'],webbing:['strap','tape'],strap:['webbing','tiedown'],
+  parachute:['canopy','aerial','cargo'],rope:['cordage','line'],cord:['cordage','rope'],shackle:['clevis'],hardware:['fitting','buckle','hook','snap'],
+  buckle:['buckle','fastener','clip'],thread:['thread','yarn'],fabric:['fabric','cloth','textile','nylon','duck'],bag:['bag','pouch','case','container'],
+  net:['net','netting'],tent:['tent','tarpaulin','shelter'],glove:['glove'],bolt:['bolt','screw','nut','fastener']};
+const stem=w=>{w=w.replace(/[^a-z0-9]/g,'');if(w.length<4)return w;if(/ies$/.test(w))return w.slice(0,-3)+'y';if(/(ss|us)$/.test(w))return w;if(/(ches|shes|xes|ses|zes)$/.test(w))return w.slice(0,-2);if(/ings?$/.test(w)&&w.length>5)return w.replace(/ings?$/,'');return w.replace(/s$/,'')};
+function findFsc(text){
+  const words=text.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!['and','the','for','with','all','any'].includes(w));
+  // Your own words count double; synonyms count once.
+  const terms=new Map();for(const w of words){const t=stem(w);terms.set(t,2);(SYN[t]||[]).forEach(x=>{const u=stem(x);if(!terms.has(u))terms.set(u,1)})}
+  if(!terms.size)return [];
+  const hits=nw=>{let h=0;for(const[t,wt]of terms)if(nw.includes(t))h+=wt;return h};
+  const sc={};const get=f=>sc[f]=sc[f]||{name:0,item:0,n:0,ex:new Set()};
+  for(const[f,name]of Object.entries(FSC)){const h=hits(name.toLowerCase().split(/[^a-z0-9]+/).map(stem));if(h)get(f).name+=h}
+  for(const r of D.rows){if(!r[3])continue;const h=hits(String(r[4]).toLowerCase().split(/[^a-z0-9]+/).map(stem));if(h){const o=get(r[3]);o.item+=h;o.n++;if(o.ex.size<3)o.ex.add(r[4])}}
+  return Object.entries(sc).map(([f,o])=>({f,score:o.name*5+Math.log2(1+o.item)*4,n:o.n,ex:[...o.ex]})).sort((a,b)=>b.score-a.score).slice(0,20);
+}
+function runFind(){
+  const res=findFsc($('#fFind').value),out=$('#fFindOut');
+  if(!res.length){out.innerHTML='<div class="small" style="margin-top:6px">No matches. Try other words, like the item names on RFQs you\'ve bid.</div>';return}
+  const cnt={};for(const r of D.rows)if(r[3])cnt[r[3]]=(cnt[r[3]]||0)+1;
+  out.innerHTML=`<div class="fres">${res.map(x=>`<label><input type="checkbox" value="${x.f}" ${fscSel.has(x.f)?'checked disabled':''}><span><b>${x.f}</b> ${esc(FSC[x.f]||'')} <span class="small">· ${cnt[x.f]||0} open RFQs${x.n?`, ${x.n} matching`:''}</span>${x.ex.length?`<br><span class="ex">e.g. ${x.ex.map(esc).join(' · ')}</span>`:''}</span></label>`).join('')}</div>
+  <div style="display:flex;gap:6px;margin-top:6px"><button class="btn p" id="fAdd">Add selected FSCs</button><button class="btn" id="fClr">Close</button></div>`;
+  $('#fAdd').onclick=()=>{out.querySelectorAll('input:checked:not(:disabled)').forEach(i=>fscSel.add(i.value));chips();page=0;run();out.innerHTML=''};
+  $('#fClr').onclick=()=>out.innerHTML='';
+}
+$('#fFindGo').onclick=runFind;$('#fFind').addEventListener('keydown',e=>{if(e.key==='Enter')runFind()});
 function filt(skipFsc){
   const saSet=new Set([...document.querySelectorAll('#saBox input:checked')].map(i=>i.value)), posted=$('#posted').value, nl=nsnListSet(), hideSeen=$('#hideSeen').checked, fobF=$('#fobF').value, inspF=$('#inspF').value, hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, am=$('#amsc').value, ty=$('#type').value;
   const cl=+$('#close').value||0, ml=+$('#minleft').value||0, qmin=+$('#qmin').value||0, qmax=+$('#qmax').value||0;

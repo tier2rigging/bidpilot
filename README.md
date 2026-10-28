@@ -74,6 +74,8 @@ Opening an RFQ marks it as viewed. In the list, opened RFQs are grayed out and n
 
 ## Search extras
 
+- **Find FSCs for what you sell:** describe your products in plain English (e.g. *cargo slings, webbing, tie-down straps*). BidPilot ranks the FSCs whose names or open-RFQ item names match, shows example items and open-RFQ counts, and adds the ones you tick.
+
 - **Saved views:** set your filters, then click **+ Save view** above the table. Each view becomes a tab, and clicking it restores every filter, the FSC list, and the sort. **Update view** overwrites the open tab, and **×** deletes it. Views sync with the CRM.
 - **NSN / part number list:** paste any number of NSNs or part numbers. The list shows open RFQs for those NSNs, or RFQs where one of the numbers is an approved part.
 - **Set-aside:** tick several at once.
