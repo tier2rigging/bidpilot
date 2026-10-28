@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("7330",[["SPE3SE27V0056 &raquo; Award/Basic Package View","","","","01RR2",15925,"2026-10-27","2026-10-27","7330008916077","INSERT ASSEMBLY, HEATER","7018693285","SPE3SE27T0042","https://dibbs2.bsm.dla.mil/Downloads/Awards/27OCT26/SPE3SE27V0056.PDF",null,"",null,null]]);

@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("8315",[["SPE1C127V0051 &raquo; Award/Basic Package View","","","","17KA9",1100,"2026-10-27","2026-10-27","8315014468613","KEEPER, BELT-STRAP","7018558318","SPE1C126T1824","https://dibbs2.bsm.dla.mil/Downloads/Awards/27OCT26/SPE1C127V0051.PDF",null,"",null,null]]);
