@@ -1,0 +1,48 @@
+name: Lookup
+run-name: Lookup ${{ github.event.inputs.q }}
+on:
+  workflow_dispatch:
+    inputs:
+      q:
+        description: "Solicitation (SPE7L125T04H3) or NSN (5340-01-665-9391)"
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: lookup-${{ github.event.inputs.q }}
+  cancel-in-progress: false
+jobs:
+  lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            ingest
+            data/lookup
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install PDF reader
+        run: sudo apt-get install -y -q poppler-utils || (sudo apt-get update -q && sudo apt-get install -y -q poppler-utils)
+        continue-on-error: true
+      - name: Look up on DIBBS
+        env:
+          Q: ${{ github.event.inputs.q }}
+        run: node ingest/lookup.mjs --q "$Q"
+      - name: Save result
+        env:
+          Q: ${{ github.event.inputs.q }}
+        run: |
+          git config user.name "bidpilot-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A data/lookup
+          git diff --cached --quiet && exit 0
+          git commit -m "Lookup $(printf %s "$Q" | tr -cd 'A-Za-z0-9-')"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase -X theirs origin main && git push; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep $((5 * i))
+          done
+          exit 1

@@ -81,6 +81,7 @@ td.nom{white-space:normal;min-width:160px}
     <div class="card">
       <label>Search</label>
       <input id="q" placeholder="NSN, solicitation, item name…">
+      <div id="lkBox"></div>
       <label>NSN / part number list</label>
       <textarea id="nsnList" rows="2" placeholder="Paste NSNs or part numbers, one per line or comma-separated"></textarea>
       <div class="small" id="nsnListN"></div>
@@ -770,27 +771,77 @@ function readerModal(forRow){
   $('#rdFile').onchange=e=>{const f=e.target.files[0];if(f)readPdf(f,forRow)};
 }
 function closeReader(){$('#modalBox').classList.remove('wide');$('#modalBg').classList.add('hidden')}
-async function readPdf(file,forRow){
+async function readPdf(file,forRow,lk){
   const out=$('#rdOut');out.innerHTML='<div class="small">Reading…</div>';
   try{
     const lib=await loadPdfJs();
-    const lines=await RfqReader.pdfToLines(lib,new Uint8Array(await file.arrayBuffer()));
+    const lines=await RfqReader.pdfToLines(lib,file.bytes||new Uint8Array(await file.arrayBuffer()));
     const res=RfqReader.parse(lines);
     if(!res.header.solicitation&&!res.items.length){out.innerHTML='<div class="small">This doesn\'t look like a DLA RFQ (no solicitation number or line items found). If it\'s a scanned PDF, it can\'t be read as text.</div>';return}
     res.file=file.name;res.read=nowIso();
     const row=matchRow(res)||forRow;
-    out.innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="btn p" id="rdSave">${row?'Save to this RFQ in my pipeline':'Add to my pipeline'}</button><button class="btn" id="rdCopy">Copy as text</button><button class="btn" id="rdPrint">Print / save PDF</button>${row?'<button class="btn" id="rdOpen">Open the RFQ</button>':''}</div>${forRow&&res.header.solicitation&&res.header.solicitation.replace(/-/g,'')!==forRow[0]?`<div class="tag t-warn" style="margin-bottom:8px">Heads up: this PDF is ${esc(res.header.solicitation)}, not ${esc(forRow[0])}.</div>`:''}${reqSheet(res)}`;
-    if(row){$('#rdSave').onclick=()=>{const k=key(row);pipe[k]={...(pipe[k]||{status:'Watching',row}),req:res,saved:nowIso()};autoSuppliers(row);crmSave();pipeCount();renderTable();$('#rdSave').textContent='Saved ✓'};
+    const lkTop=lk?`<div class="small" style="margin-bottom:8px">DIBBS status: ${lkTag(lk.status)} · looked up ${esc((lk.at||'').slice(0,10))}${lk.history&&lk.history.length?` · last buy ${esc(lk.history[0][4])} @ $${lk.history[0][3]}`:''}</div>`:'';
+    out.innerHTML=lkTop+`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="btn p" id="rdSave">${row?'Save to this RFQ in my pipeline':'Add to my pipeline'}</button><button class="btn" id="rdCopy">Copy as text</button><button class="btn" id="rdPrint">Print / save PDF</button>${row?'<button class="btn" id="rdOpen">Open the RFQ</button>':''}</div>${forRow&&res.header.solicitation&&res.header.solicitation.replace(/-/g,'')!==forRow[0]?`<div class="tag t-warn" style="margin-bottom:8px">Heads up: this PDF is ${esc(res.header.solicitation)}, not ${esc(forRow[0])}.</div>`:''}${reqSheet(res)}`;
+    if(row){$('#rdSave').onclick=()=>{const k=key(row);pipe[k]={...(pipe[k]||{status:'Watching',row}),req:res,...(lk?{lk}:{}),saved:nowIso()};autoSuppliers(row);crmSave();pipeCount();renderTable();$('#rdSave').textContent='Saved ✓'};
       $('#rdOpen').onclick=()=>{closeReader();openDrawer(row)}}else{const rows=rowsFromReq(res).filter(r=>r[0]);
       if(!rows.length)$('#rdSave').disabled=true;
       else{$('#rdOut').insertAdjacentHTML('afterbegin',`<div class="tag t-warn" style="margin-bottom:8px;display:inline-block">${esc(res.header.solicitation||'')} isn't in BidPilot's open list${res.header.returnBy&&daysLeft(res.header.returnBy)<0?' (its return-by date has passed, but DLA can keep it open and ask for updated quotes)':''}. Add it to your pipeline to track it.</div>`);
-      $('#rdSave').onclick=()=>{let last;for(const r of rows){const k=key(r);pipe[k]={...(pipe[k]||{status:'Watching'}),row:r,manual:true,req:res,saved:nowIso()};autoSuppliers(r);last=r}crmSave();pipeCount();$('#rdSave').textContent=`Added ${rows.length} line${rows.length>1?'s':''} ✓`;$('#rdSave').disabled=true;
+      $('#rdSave').onclick=()=>{let last;for(const r of rows){const k=key(r);pipe[k]={...(pipe[k]||{status:'Watching'}),row:r,manual:true,req:res,...(lk?{lk}:{}),saved:nowIso()};autoSuppliers(r);last=r}crmSave();pipeCount();$('#rdSave').textContent=`Added ${rows.length} line${rows.length>1?'s':''} ✓`;$('#rdSave').disabled=true;
         $('#rdSave').insertAdjacentHTML('afterend',' <button class="btn" id="rdOpen2">Open it</button>');$('#rdOpen2').onclick=()=>{closeReader();openDrawer(last)}}}}
     $('#rdCopy').onclick=()=>{navigator.clipboard.writeText(RfqReader.toText(res)).then(()=>$('#rdCopy').textContent='Copied ✓',()=>alert('Copy failed'))};
     $('#rdPrint').onclick=()=>printReq(res);
   }catch(e){out.innerHTML=`<div class="small">Couldn't read that PDF: ${esc(e.message||String(e))}</div>`}
 }
 
+// ---------- DIBBS lookup (any solicitation or NSN, open or closed; runs as a GitHub Action) ----------
+const LK_REPO='tier2rigging/bidpilot';
+const lkNorm=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+const lkOk=q=>/^SP[A-Z0-9]{4}\d{2}[A-Z][A-Z0-9]{4}$/.test(q)||/^\d{13}$/.test(q);
+function lkTag(st){const c=st==='Open'?'t-ok':st?'t-warn':'';return `<span class="tag ${c}">${esc(st||'status unknown')}</span>`}
+function lkButton(){const q=lkNorm($('#q').value);$('#lkBox').innerHTML=lkOk(q)?`<button class="btn" id="lkGo" style="margin-top:6px;width:100%">🔎 Look up ${esc(q)} on DIBBS (open or closed)</button>`:'';const b=$('#lkGo');if(b)b.onclick=()=>lookup(q)}
+$('#q').addEventListener('input',lkButton);
+async function lkFetch(q){
+  const r=await fetch(`https://api.github.com/repos/${LK_REPO}/contents/data/lookup/${q}.json?t=${Date.now()}`,{cache:'no-store',headers:{Accept:'application/vnd.github.raw',...(CFG.token?{Authorization:'Bearer '+CFG.token}:{})}});
+  if(r.status===404)return null;if(!r.ok)throw new Error('GitHub '+r.status);return r.json()}
+function lkWait(q,msg){modal(`<div class="bar"><strong>Lookup ${esc(q)}</strong><button class="btn" id="lkX">✕</button></div><div class="small" id="lkMsg">${msg}</div>`);$('#lkX').onclick=closeModal}
+let lkRun=0;
+async function lookup(q,force){
+  const run=++lkRun;lkWait(q,'Checking…');
+  try{
+    if(!force){const ex=await lkFetch(q);if(run!==lkRun)return;if(ex){showLookup(ex,true);return}}
+    if(!CFG.token){$('#lkMsg').innerHTML='Add your GitHub token in ⚙ Settings first (it needs Actions: Read and write on tier2rigging/bidpilot).';return}
+    const since=new Date(Date.now()-90e3).toISOString();
+    const d=await fetch(`https://api.github.com/repos/${LK_REPO}/actions/workflows/lookup.yml/dispatches`,{method:'POST',headers:{Authorization:'Bearer '+CFG.token,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify({ref:'main',inputs:{q}})});
+    if(d.status!==204)throw new Error(d.status===403||d.status===404?'Your GitHub token needs Actions: Read and write on tier2rigging/bidpilot. Edit the token on GitHub (Settings → Developer settings → Fine-grained tokens), add that repo and permission, then try again.':d.status===401?'GitHub token is invalid or expired.':'GitHub '+d.status);
+    const t0=Date.now();
+    while(Date.now()-t0<7*60e3){
+      if(run!==lkRun||$('#modalBg').classList.contains('hidden'))return;
+      const s=Math.round((Date.now()-t0)/1000);const m=$('#lkMsg');if(m)m.textContent=`Pulling ${q} from DIBBS… ${s}s (usually 1–2 minutes). You can close this and click Look up again later.`;
+      await new Promise(r=>setTimeout(r,8000));
+      const r=await lkFetch(q).catch(()=>null);
+      if(r&&(r.at||'')>since){if(run===lkRun)showLookup(r);return}
+    }
+    $('#lkMsg').textContent='Still running. Close this and click Look up again in a minute.';
+  }catch(e){const m=$('#lkMsg');if(m)m.textContent='Lookup failed: '+(e.message||e)}
+}
+function lkBytes(b64){const s=atob(b64),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u}
+function showLookup(r,cached){
+  const sols=r.sols||[],H=r.history||[],A=r.awards||[];
+  modal(`<div class="bar" style="display:flex;justify-content:space-between;align-items:center"><strong>Lookup ${esc(r.q)}</strong><span><button class="btn" id="lkRe">↻ Refresh from DIBBS</button> <button class="btn" id="lkX">✕</button></span></div>
+  <div class="small" style="margin:4px 0 8px">${r.nsn?`NSN <b>${esc(fmtNsn(r.nsn))}</b> · `:''}Pulled ${esc((r.at||'').slice(0,16).replace('T',' '))} UTC${cached?' (saved result)':''}</div>
+  ${(r.errors||[]).length?`<div class="small" style="color:var(--warn,#b45309)">Couldn't get everything: ${esc(r.errors.join('; '))}</div>`:''}
+  <h3 style="font-size:15px;margin:10px 0 4px">Solicitations</h3>
+  ${sols.length?`<table class="aw"><tbody>${sols.map((x,i)=>`<tr><td>${esc(x.sol)}</td><td>${lkTag(x.status)}</td><td>${x.pdf?`<button class="btn p lkOpen" data-i="${i}">Open &amp; save</button>`:`<a class="btn" target="_blank" rel="noopener" href="${FILES}/Downloads/RFQ/${esc(x.sol.slice(-1))}/${esc(x.sol)}.PDF">RFQ PDF</a>${x.pdfMissing?' <span class="small">not on DIBBS</span>':''}`}</td></tr>`).join('')}</tbody></table>`:'<div class="small">No solicitations found.</div>'}
+  <h3 style="font-size:15px;margin:12px 0 4px">Procurement history</h3>
+  ${H.length?`<table class="aw"><tbody><tr class="small"><td>CAGE</td><td>Contract</td><td>Qty</td><td>Unit $</td><td>Date</td></tr>${H.slice(0,15).map(h=>`<tr><td>${esc(h[0])}</td><td>${esc(h[1])}</td><td>${h[2]}</td><td>$${h[3]}</td><td>${esc(h[4])}</td></tr>`).join('')}</tbody></table>`:'<div class="small">None in the RFQ PDF.</div>'}
+  <h3 style="font-size:15px;margin:12px 0 4px">Recent awards</h3>
+  ${A.length?`<table class="aw"><tbody><tr class="small"><td>Awarded</td><td>Contract</td><td>CAGE</td><td>Total</td></tr>${A.slice(0,15).map(a=>`<tr><td>${esc(a.awardDate)}</td><td>${a.pdf?`<a target="_blank" rel="noopener" href="${esc(a.pdf)}">${esc(a.contract)}</a>`:esc(a.contract)}</td><td>${esc(a.cage)}</td><td>${a.total!=null?'$'+a.total.toLocaleString():''}</td></tr>`).join('')}</tbody></table>`:'<div class="small">None found.</div>'}`);
+  $('#modalBox').classList.add('wide');
+  $('#lkX').onclick=closeModal;$('#lkRe').onclick=()=>lookup(r.q,true);
+  document.querySelectorAll('.lkOpen').forEach(b=>b.onclick=()=>{const x=sols[+b.dataset.i];
+    const lk={q:r.q,sol:x.sol,status:x.status,at:r.at,history:H.slice(0,15),awards:A.slice(0,15)};
+    readerModal(null);readPdf({bytes:lkBytes(x.pdf),name:x.file||x.sol+'.PDF'},null,lk)});
+}
 function closeModal(){$('#modalBg').classList.add('hidden')}
 $('#modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};
 function supForm(s,after){
@@ -990,7 +1041,7 @@ function qpSel(f,label,opts){return `<label>${label}</label><select id="qp_${f}"
 function cfgForm(){
   modal(`<div class="bar"><strong>Settings</strong><button class="btn" id="mX">✕</button></div>
   <label>Sync: private GitHub repo</label><input id="cRepo" placeholder="tier2rigging/bidpilot-data" value="${esc(CFG.repo)}">
-  <label>Sync: GitHub token</label><input id="cTok" type="password" placeholder="github_pat_…" value="${esc(CFG.token)}">
+  <label>Sync: GitHub token</label><input id="cTok" type="password" placeholder="github_pat_…" value="${esc(CFG.token)}"><div class="small">For 🔎 DIBBS lookups, this token also needs <b>Actions: Read and write</b> on <b>tier2rigging/bidpilot</b>.</div>
   <div class="small">Fine-grained token with <b>Contents: Read and write</b> on that one repo only. It's stored in this browser only. Enter it once on each device.</div>
   <label>Default target margin %</label><input id="cMt" type="number" step="1" value="${CFG.mtarget}">
   <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">DIBBS batch quote: company answers</summary>
