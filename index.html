@@ -236,6 +236,9 @@ const CFG=Object.assign({repo:'',token:'',sig:'Tier2 Rigging LLC\nCAGE: 175A8\nM
 CFG.qp=Object.assign({cage:'175A8',disc:'1',mfg:'DD',fobCity:'Manorville',fobState:'NY',fobCountry:'US'},CFG.qp||{});
 let CRM=store.get('bp_crm',null)||{pipeline:store.get('t2_pipe',{}),suppliers:{},deleted:{}};
 CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.orders=CRM.orders||{};CRM.viewed=CRM.viewed||{};CRM.views=CRM.views||{};CRM.deleted=CRM.deleted||{};
+const pickSettings=()=>({saved:CFG.settingsSaved||'',sig:CFG.sig,tpl:CFG.tpl,mtarget:CFG.mtarget,qp:{...CFG.qp}});
+if(!CRM.settings)CRM.settings=pickSettings();
+function applySettings(){const st=CRM.settings;if(!st||!st.saved||(st.saved<=(CFG.settingsSaved||'')))return;if(st.sig!=null)CFG.sig=st.sig;if(st.tpl)CFG.tpl=st.tpl;if(st.mtarget)CFG.mtarget=st.mtarget;if(st.qp)CFG.qp=Object.assign({},CFG.qp,st.qp);CFG.settingsSaved=st.saved;store.set('bp_cfg',CFG)}
 let pipe=CRM.pipeline;
 const nowIso=()=>new Date().toISOString();
 function canon(o){return JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v)}
@@ -251,6 +254,7 @@ function mergeCRM(a,b){
       const del=out.deleted[pre+id];if(w&&!(del&&del>=(w.saved||'')))out[col][id]=w;
     }
   }
+  const sa=a.settings,sb=b.settings;out.settings=!sa?(sb||null):!sb?sa:((sb.saved||'')>(sa.saved||'')?sb:sa);
   return out;
 }
 const b64e=s=>btoa(unescape(encodeURIComponent(s))), b64d=s=>decodeURIComponent(escape(atob(s.replace(/\s/g,''))));
@@ -270,13 +274,13 @@ async function sync(){
       else if(g.status!==404)throw new Error(g.status===401?'bad token':g.status===404?'repo not found':'GitHub '+g.status);
       const merged=mergeCRM(remote,CRM);
       CRM=merged;pipe=CRM.pipeline;store.set('bp_crm',CRM);
-      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},orders:remote.orders||{},viewed:remote.viewed||{},views:remote.views||{},deleted:remote.deleted||{}}))break;
+      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},orders:remote.orders||{},viewed:remote.viewed||{},views:remote.views||{},deleted:remote.deleted||{},settings:remote.settings||null}))break;
       const p=await gh('PUT',{message:'BidPilot CRM update',content:b64e(JSON.stringify(merged,null,1)),...(sha?{sha}:{})});
       if(p.status===409||p.status===422)continue;
       if(!p.ok)throw new Error(p.status===403||p.status===404?'token needs Contents read/write on this repo':'GitHub '+p.status);
       break;
     }
-    syncBadge('Synced ✓','ok');refreshViews();
+    applySettings();syncBadge('Synced ✓','ok');refreshViews();
   }catch(e){syncBadge('Sync error','err');$('#syncBadge').title=e.message}
   finally{syncing=false}
 }
@@ -1015,7 +1019,7 @@ function cfgForm(){
   <div style="display:flex;gap:6px;margin-top:10px"><button class="btn p" id="cSave">Save &amp; sync</button><button class="btn" id="cExp">Download backup</button></div>
   <div class="small" id="cMsg" style="margin-top:6px">${esc($('#syncBadge').title||'')}</div>`);
   $('#mX').onclick=closeModal;
-  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;CFG.tpl={subject1:$('#tS1').value,subjectN:$('#tSN').value,body:$('#tBody').value};CFG.mtarget=+$('#cMt').value||20;for(const f of['sb','aac','pccr','adr','pkg','haz','mat','mfg','disc','quality','cage','fobCity','fobState','fobCountry']){const el=$('#qp_'+f);if(el)CFG.qp[f]=el.value.trim()}store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
+  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;CFG.tpl={subject1:$('#tS1').value,subjectN:$('#tSN').value,body:$('#tBody').value};CFG.mtarget=+$('#cMt').value||20;for(const f of['sb','aac','pccr','adr','pkg','haz','mat','mfg','disc','quality','cage','fobCity','fobState','fobCountry']){const el=$('#qp_'+f);if(el)CFG.qp[f]=el.value.trim()}CFG.settingsSaved=nowIso();CRM.settings=pickSettings();store.set('bp_cfg',CFG);store.set('bp_crm',CRM);if(!CFG.repo||!CFG.token){syncBadge('Local only');$('#cMsg').textContent='Saved ✓ — this browser only. Add repo + token above to sync across computers.';return}$('#cMsg').textContent='Saving…';await sync();const bad=$('#syncBadge').classList.contains('err');$('#cMsg').textContent=bad?'Saved here, but sync failed: '+$('#syncBadge').title:'Saved & synced ✓ — open BidPilot on your other computer to pick it up.'};
   $('#tReset').onclick=()=>{$('#tS1').value=DEF_TPL.subject1;$('#tSN').value=DEF_TPL.subjectN;$('#tBody').value=DEF_TPL.body};
   $('#cExp').onclick=()=>{const b=new Blob([JSON.stringify(CRM,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-crm-${today}.json`;a.click()};
 }
