@@ -14,7 +14,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { get } from './fetch.mjs';
-import { parseNsnSearch } from './pastdue.mjs';
 import { parseHistory } from './history.mjs';
 import { parseAwardPage } from './awards.mjs';
 
@@ -56,14 +55,40 @@ const nsnFromText = (t) => {
   return '';
 };
 
-const DBG = {};
-async function statusFor(nsn) {
+// DIBBS RFQ NSN page (public view): nomenclature, AMSC, approved sources, and the solicitations
+// DIBBS still lists for the NSN (PR, qty, issue, return-by). A listed solicitation is still active.
+const txt = (h) => h.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+const usIso = (s) => { const m = (s || '').match(/(\d{2})-(\d{2})-(\d{4})/); return m ? `${m[3]}-${m[1]}-${m[2]}` : ''; };
+export function parseNsnPage(html) {
+  const out = { nom: '', amsc: '', as: [], sols: [] };
+  const t = txt(html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' '));
+  out.nom = (t.match(/Nomenclature:\s*(.+?)\s+AMSC:/) || [])[1] || '';
+  out.amsc = (t.match(/AMSC:\s*([A-Z0-9])\b/) || [])[1] || '';
+  let inSol = false;
+  for (const chunk of html.split(/<tr[\s>]/i).slice(1)) {
+    const tds = [...chunk.split(/<\/tr>/i)[0].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => txt(m[1]));
+    if (!tds.length) continue;
+    if (/^Solicitation #/.test(tds[0])) { inSol = true; continue; }
+    const s = tds[0].replace(/-/g, '');
+    if (/^SP[A-Z0-9]{4}\d{2}[A-Z][A-Z0-9]{4}$/.test(s)) {
+      const dates = tds.filter((x) => /^\d{2}-\d{2}-\d{4}$/.test(x));
+      const pr = tds.find((x) => /^\d{10}$/.test(x)) || '';
+      const qty = tds.slice(tds.indexOf(pr) + 1).find((x) => /^\d+$/.test(x));
+      if (!out.sols.find((x) => x.sol === s)) out.sols.push({ sol: s, pr, qty: qty ? +qty : null, issue: usIso(dates[0]), ret: usIso(dates[1]) });
+    } else if (!inSol && /^[0-9A-Z]{5}$/.test(tds[0]) && tds.length >= 2 && tds[1]) {
+      out.as.push([tds[0], tds[1], tds[2] || '']);
+    }
+  }
+  if (!out.sols.length) for (const m of t.matchAll(/\b(SP[A-Z0-9]{4}\d{2}[A-Z][A-Z0-9]{4})\b.*?\b(\d{10})\s+(\d+)\s+(\d{2}-\d{2}-\d{4})\s+(\d{2}-\d{2}-\d{4})/g))
+    if (!out.sols.find((x) => x.sol === m[1])) out.sols.push({ sol: m[1], pr: m[2], qty: +m[3], issue: usIso(m[4]), ret: usIso(m[5]) });
+  return out;
+}
+
+async function nsnPage(nsn) {
   const u = `${DIBBS}/RFQ/RFQNsn.aspx?value=${nsn}&category=issue&Scope=all`;
-  let page = await get(u);
-  let m = parseNsnSearch(page);
-  if (!m.size) { page = await get(u.replace('Scope=all', 'Scope=')); m = parseNsnSearch(page); }
-  DBG.status = { n: m.size, sample: [...m].slice(0, 8), text: page.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(-2500) };
-  return m; // sol -> status
+  let p = parseNsnPage(await get(u));
+  if (!p.sols.length) { const q = parseNsnPage(await get(u.replace('Scope=all', 'Scope='))); if (q.sols.length) p = q; }
+  return p;
 }
 
 async function awardsFor(nsn) {
@@ -72,7 +97,7 @@ async function awardsFor(nsn) {
     `${DIBBS}/Awards/AwdRecs.aspx?Category=nsn&TypeSrch=cq&Value=${nsn.slice(0, 4)}-${nsn.slice(4, 6)}-${nsn.slice(6, 9)}-${nsn.slice(9)}`,
   ];
   for (const u of tries) {
-    try { const html = await get(u); const p = parseAwardPage(html); (DBG.awards = DBG.awards || []).push({ u, rows: p.rows.length, total: p.total, text: html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(-1500) }); const r = p.rows.filter((x) => !x.nsn || x.nsn === nsn); if (r.length) return r.slice(0, 25); } catch (e) { (DBG.awards = DBG.awards || []).push({ u, err: e.message }); }
+    try { const p = parseAwardPage(await get(u)); const r = p.rows.filter((x) => !x.nsn || x.nsn === nsn); if (r.length) return r.slice(0, 25); } catch {}
   }
   return [];
 }
@@ -80,47 +105,47 @@ async function awardsFor(nsn) {
 async function main() {
   const q = normQ(rawQ);
   if (!SOL_ONLY.test(q) && !NSN_ONLY.test(q)) throw new Error(`"${rawQ}" isn't a solicitation (SPE7L125T04H3) or 13-digit NSN`);
-  const out = { q, kind: SOL_ONLY.test(q) ? 'sol' : 'nsn', at: new Date().toISOString(), nsn: '', sols: [], history: [], awards: [], errors: [] };
+  const out = { q, kind: SOL_ONLY.test(q) ? 'sol' : 'nsn', at: new Date().toISOString(), nsn: '', nom: '', amsc: '', as: [], sols: [], history: [], awards: [], errors: [] };
   const err = (where, e) => { out.errors.push(`${where}: ${e.message || e}`); log(where, 'failed:', e.message || e); };
+  const sol = (s) => { let e = out.sols.find((x) => x.sol === s); if (!e) { e = { sol: s, status: '' }; out.sols.push(e); } return e; };
 
-  let sols = [];
-  if (out.kind === 'sol') {
-    sols = [q];
-  } else {
-    out.nsn = q;
+  // NSN page: what DIBBS still lists for this NSN. Listed = still active on DIBBS.
+  const readNsn = async (nsn) => {
     try {
-      const st = await statusFor(q);
-      const all = [...st.entries()];
-      all.sort((a, b) => (b[1] === 'Open') - (a[1] === 'Open'));
-      out.sols = all.map(([sol, status]) => ({ sol, status }));
-      sols = all.slice(0, MAX_SOLS).map(([s]) => s);
-    } catch (e) { err('NSN search', e); }
-  }
+      const p = await nsnPage(nsn);
+      out.nom = out.nom || p.nom; out.amsc = out.amsc || p.amsc; if (p.as.length) out.as = p.as;
+      for (const x of p.sols) Object.assign(sol(x.sol), x, { status: 'Listed' });
+    } catch (e) { err('NSN page', e); }
+  };
 
+  if (out.kind === 'nsn') { out.nsn = q; await readNsn(q); }
+  else sol(q);
+
+  // RFQ PDFs: the looked-up solicitation, or (NSN lookup) the newest few listed ones.
+  const pdfSols = out.kind === 'sol' ? [q] : [...out.sols].sort((x, y) => (y.issue || '').localeCompare(x.issue || '')).slice(0, MAX_SOLS).map((x) => x.sol);
   let histText = '';
-  for (const sol of sols) {
-    let e = out.sols.find((x) => x.sol === sol); if (!e) { e = { sol, status: '' }; out.sols.push(e); }
+  for (const s of pdfSols) {
+    const e = sol(s);
     try {
-      const pdf = await fetchPdf(sol);
+      const pdf = await fetchPdf(s);
       if (!pdf) { e.pdfMissing = true; continue; }
       const text = pdfText(pdf.buf);
       if (!out.nsn) out.nsn = nsnFromText(text);
       if (!histText && /Procurement History/i.test(text)) histText = text;
       e.file = pdf.name;
       if (pdf.buf.length <= MAX_PDF) e.pdf = pdf.buf.toString('base64');
-      log(sol, 'PDF', pdf.name, pdf.buf.length, 'bytes');
-    } catch (x) { err(`${sol} PDF`, x); }
+      log(s, 'PDF', pdf.name, pdf.buf.length, 'bytes');
+    } catch (x) { err(`${s} PDF`, x); }
   }
 
   if (out.nsn) {
-    if (out.kind === 'sol') {
-      try { const st = await statusFor(out.nsn); const s = st.get(q); out.sols[0].status = s || ''; for (const [sol, status] of st) if (sol !== q) out.sols.push({ sol, status }); } catch (e) { err('status', e); }
-    }
+    if (out.kind === 'sol') { await readNsn(out.nsn); if (!sol(q).status) sol(q).status = 'Not listed'; }
     if (histText) { const h = parseHistory(histText).get(out.nsn); if (h) out.history = h; }
     try { out.awards = await awardsFor(out.nsn); } catch (e) { err('awards', e); }
   } else if (out.kind === 'sol') out.errors.push('could not find the NSN (RFQ PDF not available)');
+  // Looked-up solicitation first, then listed ones newest first.
+  out.sols.sort((x, y) => (y.sol === q) - (x.sol === q) || (y.status === 'Listed') - (x.status === 'Listed') || (y.issue || '').localeCompare(x.issue || ''));
 
-  if (process.env.LK_DEBUG) out.debug = DBG;
   fs.mkdirSync(DIR, { recursive: true });
   fs.writeFileSync(path.join(DIR, `${q}.json`), JSON.stringify(out));
   const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.json')).map((f) => [f, fs.statSync(path.join(DIR, f)).mtimeMs]).sort((a, b) => b[1] - a[1]);

@@ -797,7 +797,8 @@ async function readPdf(file,forRow,lk){
 const LK_REPO='tier2rigging/bidpilot';
 const lkNorm=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 const lkOk=q=>/^SP[A-Z0-9]{4}\d{2}[A-Z][A-Z0-9]{4}$/.test(q)||/^\d{13}$/.test(q);
-function lkTag(st){const c=st==='Open'?'t-ok':st?'t-warn':'';return `<span class="tag ${c}">${esc(st||'status unknown')}</span>`}
+function lkTag(st){const L={Listed:['t-ok','Active on DIBBS','DIBBS still lists this solicitation for the NSN, so it is still open for quotes'],'Not listed':['t-warn','Not listed','No longer listed on DIBBS: likely awarded, cancelled or archived. Confirm before quoting']}[st]||['','status unknown',''];return `<span class="tag ${L[0]}" title="${esc(L[2])}">${esc(L[1])}</span>`}
+function lkRow(r,x){return [x.sol,r.nsn||'',x.pr||'',(r.nsn||'').slice(0,4),r.nom||'',x.qty??null,'',x.issue||'',x.ret||'','',r.amsc||'','','',null,(x.file||x.sol+'.pdf'),(r.as||[]).map(a=>[a[0],a[1]]),'']}
 function lkButton(){const q=lkNorm($('#q').value);$('#lkBox').innerHTML=lkOk(q)?`<button class="btn" id="lkGo" style="margin-top:6px;width:100%">🔎 Look up ${esc(q)} on DIBBS (open or closed)</button>`:'';const b=$('#lkGo');if(b)b.onclick=()=>lookup(q)}
 $('#q').addEventListener('input',lkButton);
 async function lkFetch(q){
@@ -828,10 +829,11 @@ function lkBytes(b64){const s=atob(b64),u=new Uint8Array(s.length);for(let i=0;i
 function showLookup(r,cached){
   const sols=r.sols||[],H=r.history||[],A=r.awards||[];
   modal(`<div class="bar" style="display:flex;justify-content:space-between;align-items:center"><strong>Lookup ${esc(r.q)}</strong><span><button class="btn" id="lkRe">↻ Refresh from DIBBS</button> <button class="btn" id="lkX">✕</button></span></div>
-  <div class="small" style="margin:4px 0 8px">${r.nsn?`NSN <b>${esc(fmtNsn(r.nsn))}</b> · `:''}Pulled ${esc((r.at||'').slice(0,16).replace('T',' '))} UTC${cached?' (saved result)':''}</div>
+  <div class="small" style="margin:4px 0 8px">${r.nsn?`NSN <b>${esc(fmtNsn(r.nsn))}</b> · `:''}${r.nom?`${esc(r.nom)} · `:''}${r.amsc?`AMSC ${esc(r.amsc)} · `:''}Pulled ${esc((r.at||'').slice(0,16).replace('T',' '))} UTC${cached?' (saved result)':''}</div>
   ${(r.errors||[]).length?`<div class="small" style="color:var(--warn,#b45309)">Couldn't get everything: ${esc(r.errors.join('; '))}</div>`:''}
   <h3 style="font-size:15px;margin:10px 0 4px">Solicitations</h3>
-  ${sols.length?`<table class="aw"><tbody>${sols.map((x,i)=>`<tr><td>${esc(x.sol)}</td><td>${lkTag(x.status)}</td><td>${x.pdf?`<button class="btn p lkOpen" data-i="${i}">Open &amp; save</button>`:`<a class="btn" target="_blank" rel="noopener" href="${FILES}/Downloads/RFQ/${esc(x.sol.slice(-1))}/${esc(x.sol)}.PDF">RFQ PDF</a>${x.pdfMissing?' <span class="small">not on DIBBS</span>':''}`}</td></tr>`).join('')}</tbody></table>`:'<div class="small">No solicitations found.</div>'}
+  ${sols.length?`<table class="aw"><tbody><tr class="small"><td>Solicitation</td><td>Status</td><td>PR</td><td>Qty</td><td>Issued</td><td>Return by</td><td></td></tr>${sols.map((x,i)=>{const inP=pipe[key(lkRow(r,x))];return `<tr><td>${esc(x.sol)}</td><td>${lkTag(x.status)}</td><td>${esc(x.pr||'')}</td><td>${x.qty??''}</td><td>${esc(x.issue||'')}</td><td>${esc(x.ret||'')}</td><td style="white-space:nowrap">${x.pdf?`<button class="btn p lkOpen" data-i="${i}" title="Read the RFQ PDF requirements and save">Open &amp; save</button>`:`<button class="btn lkSave" data-i="${i}">${inP?'Saved ✓':'Save'}</button> <a class="btn" target="_blank" rel="noopener" href="${FILES}/Downloads/RFQ/${esc(x.sol.slice(-1))}/${esc(x.sol)}.PDF">RFQ PDF</a>`}</td></tr>`}).join('')}</tbody></table>`:'<div class="small">No solicitations found.</div>'}
+  ${(r.as||[]).length?`<h3 style="font-size:15px;margin:12px 0 4px">Approved sources</h3><table class="aw"><tbody>${r.as.map(a=>`<tr><td>${esc(a[0])}</td><td>${esc(a[1])}</td><td>${esc(a[2]||'')}</td></tr>`).join('')}</tbody></table>`:''}
   <h3 style="font-size:15px;margin:12px 0 4px">Procurement history</h3>
   ${H.length?`<table class="aw"><tbody><tr class="small"><td>CAGE</td><td>Contract</td><td>Qty</td><td>Unit $</td><td>Date</td></tr>${H.slice(0,15).map(h=>`<tr><td>${esc(h[0])}</td><td>${esc(h[1])}</td><td>${h[2]}</td><td>$${h[3]}</td><td>${esc(h[4])}</td></tr>`).join('')}</tbody></table>`:'<div class="small">None in the RFQ PDF.</div>'}
   <h3 style="font-size:15px;margin:12px 0 4px">Recent awards</h3>
@@ -841,6 +843,8 @@ function showLookup(r,cached){
   document.querySelectorAll('.lkOpen').forEach(b=>b.onclick=()=>{const x=sols[+b.dataset.i];
     const lk={q:r.q,sol:x.sol,status:x.status,at:r.at,history:H.slice(0,15),awards:A.slice(0,15)};
     readerModal(null);readPdf({bytes:lkBytes(x.pdf),name:x.file||x.sol+'.PDF'},null,lk)});
+  document.querySelectorAll('.lkSave').forEach(b=>b.onclick=()=>{const x=sols[+b.dataset.i],row=lkRow(r,x),k=key(row);
+    pipe[k]={...(pipe[k]||{status:'Watching'}),row,manual:true,lk:{q:r.q,sol:x.sol,status:x.status,at:r.at,history:H.slice(0,15),awards:A.slice(0,15)},saved:nowIso()};autoSuppliers(row);crmSave();pipeCount();renderTable();b.textContent='Saved ✓'});
 }
 function closeModal(){$('#modalBg').classList.add('hidden')}
 $('#modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};

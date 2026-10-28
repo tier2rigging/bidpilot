@@ -30,7 +30,6 @@ jobs:
       - name: Look up on DIBBS
         env:
           Q: ${{ github.event.inputs.q }}
-          LK_DEBUG: "1"
         run: node ingest/lookup.mjs --q "$Q"
       - name: Save result
         env:
