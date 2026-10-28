@@ -61,6 +61,18 @@ Every line that passes its return-by date is queued, and the daily job (`ingest/
 
 To pick up older RFQs that were posted before BidPilot started, run the workflow once by hand with **backfill** set to 180. It tries older DIBBS daily files and skips any that DIBBS no longer has.
 
+## Sign-in, workspaces and admin
+
+BidPilot sits behind Cloudflare Access: everyone signs in with GitHub (password plus authenticator code). The BidPilot API (`worker/`, a Cloudflare Worker with a D1 database, deployed by `.github/workflows/worker.yml`) adds:
+
+- **Workspaces.** Each workspace has its own pipeline, suppliers, quotes and orders. People in the same workspace share them. Tier2 Rigging is the home workspace.
+- **Company answers** (CAGE, business type, DIBBS certifications) belong to the workspace, and only owners can change them. Signature, email template and target margin are personal and follow the person to any device.
+- **Admin page** (👤 Admin, administrator only): invite people, move them between workspaces, turn someone off, remove them, lock or unlock a whole workspace, export a workspace's data, and see the activity log. The administrator is set in `worker/wrangler.toml` (`ADMIN_EMAIL`) and can't be removed, disabled or demoted from the website.
+- Turning someone off or locking a workspace blocks their data immediately. With the Cloudflare token in place, it also removes them from the Access sign-in list and signs them out.
+- Your CAGE 175A8 awards only appear in the Tier2 Rigging workspace.
+
+Without the API (opened as a file, or before it's deployed), BidPilot works the old way: this browser plus optional GitHub sync.
+
 ## How award history builds
 
 The first run pulls as many past days as DIBBS still has (30 days with the backfill). After that it adds every weekday's awards and re-checks the last 7 days for late postings. History only grows, so the longer it runs, the closer it gets to NSN-Now's depth. Award PDFs are read at up to 600 per run; any backlog is finished on later runs.

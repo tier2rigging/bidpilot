@@ -1,0 +1,55 @@
+name: Deploy BidPilot API
+on:
+  push:
+    branches: [main]
+    paths: ["worker/**", ".github/workflows/worker.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 11cdc0918b9ff2df335c859f3d0b7c9d
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check token
+        id: tok
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "::notice::Not deployed yet: add the CLOUDFLARE_API_TOKEN repository secret (Settings → Secrets and variables → Actions), then run this workflow."; echo "ok=false" >> "$GITHUB_OUTPUT"; else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Install wrangler
+        if: steps.tok.outputs.ok == 'true'
+        run: npm i -g wrangler@4 >/dev/null 2>&1 && wrangler --version
+      - name: Database (create once) and Access IDs
+        if: steps.tok.outputs.ok == 'true'
+        run: |
+          set -e
+          API=https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID
+          H="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+          DBID=$(curl -fsS -H "$H" "$API/d1/database?name=bidpilot" | jq -r '.result[] | select(.name=="bidpilot") | .uuid' | head -1)
+          if [ -z "$DBID" ]; then
+            DBID=$(curl -fsS -X POST -H "$H" -H "Content-Type: application/json" -d '{"name":"bidpilot"}' "$API/d1/database" | jq -r '.result.uuid')
+            echo "Created D1 database bidpilot"
+          fi
+          APP=$(curl -fsS -H "$H" "$API/access/apps?per_page=100" | jq -c '[.result[] | select((.domain // "" | startswith("bidpilot.tier2rigging.com")) or ((.self_hosted_domains // []) | index("bidpilot.tier2rigging.com")) or ([(.destinations // [])[] | .uri // ""] | index("bidpilot.tier2rigging.com")))][0]')
+          AUD=$(echo "$APP" | jq -r '.aud // empty')
+          POL=$(echo "$APP" | jq -r '[.policies[]? | select(.name=="Allowed") | .id][0] // .policies[0].id // empty')
+          if [ -z "$AUD" ]; then echo "::error::Could not find the Cloudflare Access app for bidpilot.tier2rigging.com (does the token have Access: Apps and Policies Read?)"; exit 1; fi
+          echo "D1: $DBID  AUD: ${AUD:0:8}…  policy: ${POL:-none}"
+          sed -i "s/database_id = \"AUTO\"/database_id = \"$DBID\"/; s/POLICY_AUD = \"AUTO\"/POLICY_AUD = \"$AUD\"/; s/ACCESS_POLICY_ID = \"AUTO\"/ACCESS_POLICY_ID = \"$POL\"/" wrangler.toml
+      - name: Deploy
+        if: steps.tok.outputs.ok == 'true'
+        run: wrangler deploy
+      - name: Give the Worker its Cloudflare token (for invite / lock-out sync with Access)
+        if: steps.tok.outputs.ok == 'true'
+        run: printf '%s' "$CLOUDFLARE_API_TOKEN" | wrangler secret put CF_API_TOKEN

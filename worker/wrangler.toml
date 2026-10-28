@@ -1,0 +1,24 @@
+# BidPilot API. Deployed by .github/workflows/worker.yml (fills in the IDs marked AUTO).
+name = "bidpilot-api"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+workers_dev = false          # only reachable through bidpilot.tier2rigging.com (behind Cloudflare Access)
+preview_urls = false
+
+routes = [
+  { pattern = "bidpilot.tier2rigging.com/api/*", zone_name = "tier2rigging.com" }
+]
+
+[vars]
+ADMIN_EMAIL = "tier2riggingservices@gmail.com"   # the only administrator; change here, not on the website
+TEAM_DOMAIN = "t2r.cloudflareaccess.com"
+HOME_WORKSPACE_ID = "tier2"
+HOME_WORKSPACE_NAME = "Tier2 Rigging"
+CF_ACCOUNT_ID = "11cdc0918b9ff2df335c859f3d0b7c9d"
+POLICY_AUD = "AUTO"
+ACCESS_POLICY_ID = "AUTO"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bidpilot"
+database_id = "AUTO"

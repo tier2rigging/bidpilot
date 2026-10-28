@@ -72,7 +72,7 @@ td.nom{white-space:normal;min-width:160px}
 <header>
   <div class="brand"><div><h1>BID<b>PILOT</b></h1><div class="tag">Government Contracting Intelligence</div></div></div>
   <span class="meta" id="meta"></span>
-  <span class="sync" id="syncBadge" title="Sync settings">Local only</span><button class="btn" id="rdBtn" title="Pull the requirements out of an RFQ PDF">📄 Read RFQ</button> <button class="btn" id="cfgBtn" title="Settings">⚙ Settings</button>
+  <span class="small" id="wsBadge" style="display:none"></span><button class="btn" id="admBtn" style="display:none" title="Users, workspaces and lock-outs">👤 Admin</button> <span class="sync" id="syncBadge" title="Sync settings">Local only</span><button class="btn" id="rdBtn" title="Pull the requirements out of an RFQ PDF">📄 Read RFQ</button> <button class="btn" id="cfgBtn" title="Settings">⚙ Settings</button>
   <nav><button id="tabFind" class="on" title="Find and filter solicitations">Discover</button><button id="tabPipe" title="Bids, suppliers, and orders">Manage <span id="pipeCount"></span></button></nav>
 </header>
 
@@ -281,11 +281,12 @@ function mergeCRM(a,b){
   return out;
 }
 const b64e=s=>btoa(unescape(encodeURIComponent(s))), b64d=s=>decodeURIComponent(escape(atob(s.replace(/\s/g,''))));
-function syncBadge(t,cls){const b=$('#syncBadge');b.textContent=t;b.className='sync '+(cls||'');const n=$('#syncNote');if(n)n.textContent=CFG.repo&&CFG.token?`Synced to private repo ${CFG.repo} (crm.json). Works on any device where you enter the same repo and token in Settings.`:'Saved in this browser only. Add a private repo in ⚙ Settings to sync across devices.'}
+function syncBadge(t,cls){const b=$('#syncBadge');b.textContent=t;b.className='sync '+(cls||'');const n=$('#syncNote');if(n)n.textContent=SERVER?`Saved to the ${SERVER.workspace.name} workspace. Everyone in this workspace sees the same pipeline, suppliers and orders.`:CFG.repo&&CFG.token?`Synced to private repo ${CFG.repo} (crm.json). Works on any device where you enter the same repo and token in Settings.`:'Saved in this browser only. Add a private repo in ⚙ Settings to sync across devices.'}
 async function gh(method,body){return fetch(`https://api.github.com/repos/${CFG.repo}/contents/crm.json`,{method,cache:'no-store',headers:{Authorization:'Bearer '+CFG.token,Accept:'application/vnd.github+json',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined})}
 let syncT=null,syncing=false;
-function scheduleSync(){if(!CFG.repo||!CFG.token){syncBadge('Local only');return}clearTimeout(syncT);syncBadge('Saving…');syncT=setTimeout(sync,1200)}
+function scheduleSync(){if(SERVER){clearTimeout(syncT);syncBadge('Saving…');syncT=setTimeout(sync,1200);return}if(!CFG.repo||!CFG.token){syncBadge('Local only');return}clearTimeout(syncT);syncBadge('Saving…');syncT=setTimeout(sync,1200)}
 async function sync(){
+  if(SERVER)return serverSync();
   if(!CFG.repo||!CFG.token){syncBadge('Local only');return}
   if(syncing){scheduleSync();return}
   syncing=true;syncBadge('Syncing…');
@@ -307,6 +308,106 @@ async function sync(){
   }catch(e){syncBadge('Sync error','err');$('#syncBadge').title=e.message}
   finally{syncing=false}
 }
+
+// ---------- workspaces (BidPilot API behind Cloudflare Access) ----------
+// SERVER is null until /api/me answers; without the API (old setup, or opened as a file) BidPilot
+// keeps working the old way: this browser + optional GitHub sync.
+let SERVER=null, SRV_VER=0;
+const EMPTY_CRM=()=>({pipeline:{},suppliers:{},orders:{},viewed:{},views:{},deleted:{}});
+async function api(method,path,body){const r=await fetch('/api/'+path,{method,cache:'no-store',credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const ct=r.headers.get('content-type')||'';const j=ct.includes('json')?await r.json().catch(()=>({})):{};return{status:r.status,ok:r.ok,json:j,isApi:ct.includes('json')}}
+async function serverSync(){
+  if(syncing){scheduleSync();return}
+  syncing=true;syncBadge('Syncing…');
+  try{
+    for(let i=0;i<4;i++){
+      const g=await api('GET','crm');if(!g.ok)throw new Error(g.json.message||('API '+g.status));
+      const remote=g.json.data||EMPTY_CRM();SRV_VER=g.json.version;
+      const merged=mergeCRM(remote,CRM);CRM=merged;pipe=CRM.pipeline;store.set('bp_crm',CRM);
+      if(g.json.data&&canon(merged)===canon({...EMPTY_CRM(),...remote}))break;
+      const p=await api('PUT','crm',{version:SRV_VER,data:merged});
+      if(p.status===409)continue;
+      if(!p.ok)throw new Error(p.json.message||('API '+p.status));
+      SRV_VER=p.json.version;break;
+    }
+    syncBadge('Synced ✓','ok');refreshViews();
+  }catch(e){syncBadge('Sync error','err');$('#syncBadge').title=e.message}
+  finally{syncing=false}
+}
+const SETTINGS_KEYS=['sig','mtarget','tpl'];   // personal; the company answers (CFG.qp) are shared by the workspace
+let CAN_CO=false;
+async function saveServerSettings(){if(!SERVER)return;const d={};for(const k of SETTINGS_KEYS)if(CFG[k]!==undefined)d[k]=CFG[k];await api('PUT','settings',{data:d,...(CAN_CO?{company:{qp:CFG.qp}}:{})})}
+function blockScreen(title,msg){document.body.innerHTML=`<div style="max-width:520px;margin:12vh auto;padding:24px;font:15px/1.5 system-ui,sans-serif;text-align:center"><div style="font:800 26px system-ui;letter-spacing:.5px;color:#c8102e;margin-bottom:12px">BID<b>PILOT</b></div><h2 style="margin:0 0 8px">${esc(title)}</h2><p style="color:#555">${esc(msg)}</p><p style="color:#777;font-size:13px">Signed in through Cloudflare Access. To use a different account, close this browser window and sign in again.</p></div>`}
+const isHomeWs=()=>!SERVER||SERVER.workspace.id==='tier2';
+async function initServer(){
+  let me;try{me=await api('GET','me')}catch{return false}
+  if(!me.isApi)return false;                       // no API here: keep the old local / GitHub mode
+  if(me.status===403||me.status===401){blockScreen(me.json.error==='not_invited'?'Not set up yet':me.json.error==='workspace_locked'?'Workspace locked':'Access turned off',me.json.message||'Ask the administrator for access.');return 'blocked'}
+  if(!me.ok)return false;
+  SERVER=me.json;
+  // Keep each workspace's data apart in this browser (a shared computer, or switching accounts).
+  const owner=store.get('bp_owner',null), mine=SERVER.email+'|'+SERVER.workspace.id;
+  if(owner!==mine){
+    const legacyMine=!owner&&SERVER.admin&&isHomeWs();   // your existing data from before workspaces: keep and upload it
+    if(!legacyMine){if(Object.keys(CRM.pipeline||{}).length)store.set('bp_crm_backup_'+Date.now(),CRM);CRM=EMPTY_CRM();pipe=CRM.pipeline;store.set('bp_crm',CRM)}
+    store.set('bp_owner',mine);
+  }
+  // Settings follow the person, not the browser.
+  const st=await api('GET','settings');CAN_CO=!!(st.ok&&st.json.canEditCompany);
+  const first=SERVER.admin&&isHomeWs()&&st.ok&&!st.json.data&&!st.json.company;   // first time: copy your current settings up
+  if(!first){
+    if(st.ok&&st.json.data){for(const k of SETTINGS_KEYS)if(st.json.data[k]!==undefined)CFG[k]=st.json.data[k]}else{CFG.sig='';delete CFG.tpl}
+    CFG.qp=Object.assign({cage:'',disc:'1',mfg:'DD',fobCity:'',fobState:'',fobCountry:'US'},(st.ok&&st.json.company&&st.json.company.qp)||{});
+  }else await saveServerSettings();
+  delete CFG.repo;delete CFG.token;store.set('bp_cfg',CFG);
+  $('#wsBadge').style.display='';$('#wsBadge').textContent=`${SERVER.workspace.name} · ${SERVER.email}`;
+  if(SERVER.admin)$('#admBtn').style.display='';
+  return true;
+}
+
+// ---------- admin page ----------
+const fmtWhen=t=>t?new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'never';
+async function adminModal(msg){
+  const r=await api('GET','admin/state');
+  if(!r.ok){modal(`<div class="bar"><strong>Admin</strong><button class="btn" id="mX">✕</button></div><div class="small">${esc(r.json.message||'Could not load.')}</div>`);$('#mX').onclick=closeModal;return}
+  const S=r.json,ws=S.workspaces,crm=Object.fromEntries(S.crm.map(c=>[c.workspace,c]));
+  const wsOpts=sel=>ws.map(w=>`<option value="${esc(w.id)}" ${w.id===sel?'selected':''}>${esc(w.name)}</option>`).join('');
+  modal(`<div class="bar"><strong>Admin: users &amp; workspaces</strong><button class="btn" id="mX">✕</button></div>
+  ${msg?`<div class="tag t-warn" style="display:block;margin:6px 0;white-space:normal">${esc(msg)}</div>`:''}
+  <div class="small" style="margin-bottom:8px">${S.accessSync?'Invites, removals and lock-outs also update the Cloudflare Access sign-in list automatically.':'Cloudflare Access sync is off: after inviting or removing someone here, also add or remove their email in Cloudflare Zero Trust → Access → Policies → Allowed.'}</div>
+  <h3 style="font-size:15px;margin:10px 0 4px">Invite someone</h3>
+  <div class="row2"><div><label>Email (the one on their GitHub account)</label><input id="aEmail" placeholder="name@example.com"></div><div><label>Name (optional)</label><input id="aName"></div></div>
+  <div class="row2"><div><label>Workspace</label><select id="aWs">${wsOpts('tier2')}<option value="__new">+ New workspace…</option></select></div><div><label>Role</label><select id="aRole"><option value="member">Member</option><option value="owner">Owner</option></select></div></div>
+  <input id="aNewWs" placeholder="New workspace name, e.g. Mike's Contracting" style="display:none;margin-top:6px">
+  <button class="btn p" id="aInvite" style="margin-top:8px">Invite</button>
+  <h3 style="font-size:15px;margin:16px 0 4px">People</h3>
+  <table class="aw"><thead><tr><th>Email</th><th>Workspace</th><th>Role</th><th>Last used</th><th>Access</th><th></th></tr></thead><tbody>
+  ${S.users.map(u=>{const me=u.email===S.admin;return`<tr data-u="${esc(u.email)}"><td>${esc(u.email)}${u.name?`<br><span class="small">${esc(u.name)}</span>`:''}</td>
+    <td><select class="uWs" ${me?'disabled':''}>${wsOpts(u.workspace)}</select></td>
+    <td><select class="uRole" ${me?'disabled':''}><option value="member" ${u.role==='member'?'selected':''}>Member</option><option value="owner" ${u.role==='owner'?'selected':''}>Owner</option></select></td>
+    <td class="small">${fmtWhen(u.last_seen)}</td>
+    <td>${me?'<span class="tag t-ok">Administrator</span>':`<button class="btn uDis">${u.disabled?'Turn on':'Turn off'}</button>${u.disabled?' <span class="tag t-acc">off</span>':''}`}</td>
+    <td>${me?'':'<button class="btn uDel" title="Remove this person">Remove</button>'}</td></tr>`}).join('')}
+  </tbody></table>
+  <h3 style="font-size:15px;margin:16px 0 4px">Workspaces</h3>
+  <table class="aw"><thead><tr><th>Workspace</th><th>People</th><th>Data</th><th>Last saved</th><th></th></tr></thead><tbody>
+  ${ws.map(w=>{const c=crm[w.id],n=S.users.filter(u=>u.workspace===w.id).length;return`<tr data-w="${esc(w.id)}" data-n="${esc(w.name)}"><td><b>${esc(w.name)}</b>${w.locked?' <span class="tag t-acc">locked</span>':''}</td><td>${n}</td><td class="small">${c?(c.bytes<1024?'under 1 KB':Math.round(c.bytes/1024)+' KB'):'empty'}</td><td class="small">${c?fmtWhen(c.updated)+(c.updated_by?'<br>'+esc(c.updated_by):''):''}</td>
+    <td style="white-space:nowrap">${w.id==='tier2'?'':`<button class="btn wLock">${w.locked?'Unlock':'Lock'}</button> `}<a class="btn" href="/api/admin/export?workspace=${encodeURIComponent(w.id)}">Export</a>${w.id==='tier2'||n?'':' <button class="btn wDel">Delete</button>'}</td></tr>`}).join('')}
+  </tbody></table>
+  <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Activity log</summary><table class="aw"><tbody>${S.audit.map(a=>`<tr><td class="small">${fmtWhen(a.at)}</td><td class="small">${esc(a.action.replace(/_/g,' '))}</td><td class="small">${esc(a.detail||'')}</td></tr>`).join('')||'<tr><td class="small">Nothing yet.</td></tr>'}</tbody></table></details>`);
+  $('#modalBox').classList.add('wide');$('#mX').onclick=closeModal;
+  const done=(res,ok)=>{if(!res.ok)return adminModal(res.json.message||'That didn’t work.');const a=res.json.access;adminModal(ok+(a&&a.synced===false&&a.note?' '+a.note:''))};
+  $('#aWs').onchange=()=>{$('#aNewWs').style.display=$('#aWs').value==='__new'?'':'none'};
+  $('#aInvite').onclick=async()=>{let wsId=$('#aWs').value;
+    if(wsId==='__new'){const name=$('#aNewWs').value.trim();if(!name)return alert('Name the new workspace.');const w=await api('POST','admin/workspace',{name});if(!w.ok)return adminModal(w.json.message);wsId=w.json.id}
+    done(await api('POST','admin/user',{email:$('#aEmail').value.trim(),name:$('#aName').value.trim(),workspace:wsId,role:$('#aRole').value}),'Invited. They sign in at bidpilot.tier2rigging.com with GitHub.')};
+  const U=e=>S.users.find(u=>u.email===e.closest('tr').dataset.u);
+  document.querySelectorAll('#modalBox .uWs,#modalBox .uRole').forEach(x=>x.onchange=async()=>{const tr=x.closest('tr'),u=U(x);done(await api('POST','admin/user',{email:u.email,name:u.name,workspace:tr.querySelector('.uWs').value,role:tr.querySelector('.uRole').value,disabled:!!u.disabled}),'Saved.')});
+  document.querySelectorAll('#modalBox .uDis').forEach(b=>b.onclick=async()=>{const u=U(b);if(!u.disabled&&!confirm(`Turn off access for ${u.email}? They're signed out right away and can't get back in until you turn them on.`))return;done(await api('POST','admin/user',{email:u.email,name:u.name,workspace:u.workspace,role:u.role,disabled:!u.disabled}),u.disabled?'Access turned on.':'Access turned off.')});
+  document.querySelectorAll('#modalBox .uDel').forEach(b=>b.onclick=async()=>{const u=U(b);if(!confirm(`Remove ${u.email}? Their workspace data stays; only their access and personal settings are removed.`))return;done(await api('DELETE','admin/user?email='+encodeURIComponent(u.email)),'Removed.')});
+  document.querySelectorAll('#modalBox .wLock').forEach(b=>b.onclick=async()=>{const tr=b.closest('tr'),w=ws.find(x=>x.id===tr.dataset.w);if(!w.locked&&!confirm(`Lock ${w.name}? Everyone in it is signed out and blocked until you unlock it. Their data is kept.`))return;done(await api('POST','admin/workspace',{id:w.id,name:w.name,locked:!w.locked}),w.locked?'Unlocked.':'Locked.')});
+  document.querySelectorAll('#modalBox .wDel').forEach(b=>b.onclick=async()=>{const tr=b.closest('tr');if(!confirm(`Delete ${tr.dataset.n} and all its data? Export it first if you might need it.`))return;done(await api('DELETE','admin/workspace?id='+encodeURIComponent(tr.dataset.w)),'Deleted.')});
+}
+$('#admBtn').onclick=()=>adminModal();
 function crmSave(){CRM.pipeline=pipe;store.set('bp_crm',CRM);scheduleSync()}
 function delPipe(k){delete pipe[k];CRM.deleted['p:'+k]=nowIso();crmSave()}
 // Viewed RFQs: keyed by solicitation + PR, value {saved}. Only open RFQs are kept.
@@ -551,7 +652,7 @@ function openDrawer(r){
   <div class="small" style="margin-top:4px">Used by <b>Manage → Export DIBBS batch file</b>. Your company answers (small business, ADR, etc.) are set once in ⚙ Settings.</div>
   </details>
   </div>
-  <label>Notes</label><textarea id="pn" rows="3">${esc(p.notes||'')}</textarea>
+  <label>Notes</label><textarea id="pn" rows="3">${esc(p.notes||'')}</textarea><div class="small" style="margin-top:2px">Don't store passwords, bank or tax info here.</div>
   <div style="margin-top:8px"><button class="btn p" id="psave">Save</button></div>
   ${(()=>{const rel=D.rows.filter(x=>x[1]===r[1]&&key(x)!==key(r));return rel.length?`<h3 style="font-size:15px;margin:18px 0 4px">Related open RFQs: same NSN (${rel.length})</h3>
   <table class="aw"><tbody>${rel.slice(0,15).map(x=>`<tr class="relGo" data-k="${esc(key(x))}" style="cursor:pointer"><td>${esc(x[0])}</td><td>Qty ${x[5]??''} ${esc(x[6]||'')}</td><td>closes ${esc(x[8]||'')}</td><td>${pipe[key(x)]?`<span class="tag t-acc">${esc(pipe[key(x)].status)}</span>`:''}</td></tr>`).join('')}</tbody></table>`:''})()}
@@ -826,7 +927,7 @@ function supForm(s,after){
   ${f('sName','Company name',s.name)}<div class="row2">${f('sCage','CAGE',s.cage)}${f('sContact','Contact name',s.contact)}</div>
   <div class="row2">${f('sEmail','Email (for RFQs)',s.email,'email')}${f('sPhone','Phone',s.phone)}</div>${f('sWeb','Website',s.website)}
   <label>Include in RFQ emails?</label><select id="sQuoting"><option value="Yes" ${s.quoting!=='No'?'selected':''}>Yes</option><option value="No" ${s.quoting==='No'?'selected':''}>No, never send them RFQs</option></select>
-  <label>Notes</label><textarea id="sNotes" rows="3">${esc(s.notes||'')}</textarea>
+  <label>Notes</label><textarea id="sNotes" rows="3">${esc(s.notes||'')}</textarea><div class="small" style="margin-top:2px">Don't store passwords, bank or tax info here.</div>
   ${s.cage?`<div class="small" style="margin-top:6px"><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(s.cage)}&page=1">Look up ${esc(s.cage)} on DLA CAGE</a> for the company name and address.</div>`:''}
   <div style="display:flex;justify-content:space-between;margin-top:10px"><button class="btn p" id="sSave">Save</button>${s.id?'<button class="btn" id="sDel">Delete</button>':''}</div>`);
   $('#mX').onclick=closeModal;
@@ -899,7 +1000,8 @@ $('#bulkMail').onclick=()=>{
 };
 
 // ---------- orders (won awards) ----------
-const MY=window.MY_AWARDS||{rows:[],cages:['175A8']};
+const MY0=window.MY_AWARDS||{rows:[],cages:['175A8']};
+const MY={get rows(){return isHomeWs()||(MY0.cages||[]).includes(String(CFG.qp.cage||'').toUpperCase())?(MY0.rows||[]):[]},get cages(){return isHomeWs()?(MY0.cages||[]):[String(CFG.qp.cage||'').toUpperCase()].filter(Boolean)},get updated(){return MY0.updated}};
 const OSTAT=['Awarded','PO sent to supplier','Received from supplier','Shipped to DLA','Invoiced (WAWF)','Paid','Cancelled'];
 const ordId=a=>`${a[0]}|${a[1]||''}`;
 function allOrders(){
@@ -937,7 +1039,7 @@ function ordForm(o){
   <div class="row2">${f('oPo','Supplier PO #',o.po)}${f('oSc','Supplier cost $ total',o.supCost,'number')}</div>
   <div class="row2">${f('oShip','Shipped to DLA (date)',o.shipDate,'date')}${f('oTrk','Tracking #',o.tracking)}</div>
   <div class="row2">${f('oInv','Invoice / WAWF #',o.invoice)}${f('oPaid','Paid (date)',o.paidDate,'date')}</div>
-  <label>Notes</label><textarea id="oNotes" rows="3">${esc(o.notes||'')}</textarea>
+  <label>Notes</label><textarea id="oNotes" rows="3">${esc(o.notes||'')}</textarea><div class="small" style="margin-top:2px">Don't store passwords, bank or tax info here.</div>
   ${o.total&&o.supCost?`<div class="small" style="margin-top:6px">Gross profit: $${(o.total-o.supCost).toFixed(2)} (${((o.total-o.supCost)/o.total*100).toFixed(1)}%)</div>`:''}
   <div style="display:flex;justify-content:space-between;margin-top:10px"><button class="btn p" id="oSave">Save</button>${o.manual||(!o.auto&&CRM.orders[o.id])?'<button class="btn" id="oDel">Delete</button>':''}</div>`);
   $('#mX').onclick=closeModal;
@@ -1016,9 +1118,9 @@ $('#bqExport').onclick=async()=>{
 function qpSel(f,label,opts){return `<label>${label}</label><select id="qp_${f}"><option value="">Choose…</option>${opts.map(([v,t])=>`<option value="${v}" ${CFG.qp[f]===v?'selected':''}>${esc(t)}</option>`).join('')}</select>`}
 function cfgForm(){
   modal(`<div class="bar"><strong>Settings</strong><button class="btn" id="mX">✕</button></div>
-  <label>Sync: private GitHub repo</label><input id="cRepo" placeholder="tier2rigging/bidpilot-data" value="${esc(CFG.repo)}">
-  <label>Sync: GitHub token</label><input id="cTok" type="password" placeholder="github_pat_…" value="${esc(CFG.token)}">
-  <div class="small">Fine-grained token with <b>Contents: Read and write</b> on that one repo only. It's stored in this browser only. Enter it once on each device.</div>
+  ${SERVER?`<div class="small" style="margin:6px 0 10px">Workspace: <b>${esc(SERVER.workspace.name)}</b> · signed in as ${esc(SERVER.email)}. Your data syncs automatically, and these settings follow you to any device.</div><input id="cRepo" type="hidden" value=""><input id="cTok" type="hidden" value="">`:`<label>Sync: private GitHub repo</label><input id="cRepo" placeholder="tier2rigging/bidpilot-data" value="${esc(CFG.repo||'')}">
+  <label>Sync: GitHub token</label><input id="cTok" type="password" placeholder="github_pat_…" value="${esc(CFG.token||'')}">
+  <div class="small">Fine-grained token with <b>Contents: Read and write</b> on that one repo only. It's stored in this browser only. Enter it once on each device.</div>`}
   <label>Default target margin %</label><input id="cMt" type="number" step="1" value="${CFG.mtarget}">
   <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">DIBBS batch quote: company answers</summary>
   <div class="small" style="margin:6px 0">These are certifications you make on every quote. BidPilot never picks them for you, and the export won't run until each one is set. Use the same answers you give on DIBBS's web quote form.</div>
@@ -1045,8 +1147,9 @@ function cfgForm(){
   <label>Email signature (used in RFQ drafts)</label><textarea id="cSig" rows="5">${esc(CFG.sig)}</textarea>
   <div style="display:flex;gap:6px;margin-top:10px"><button class="btn p" id="cSave">Save &amp; sync</button><button class="btn" id="cExp">Download backup</button></div>
   <div class="small" id="cMsg" style="margin-top:6px">${esc($('#syncBadge').title||'')}</div>`);
+  if(SERVER&&!CAN_CO){document.querySelectorAll('#modalBox [id^="qp_"]').forEach(x=>x.disabled=true);const d=$('#modalBox details');if(d)d.insertAdjacentHTML('beforeend','<div class="small" style="margin-top:6px">Set by your workspace owner. Shared by everyone in '+esc(SERVER.workspace.name)+'.</div>')}
   $('#mX').onclick=closeModal;
-  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;CFG.tpl={subject1:$('#tS1').value,subjectN:$('#tSN').value,body:$('#tBody').value};CFG.mtarget=+$('#cMt').value||20;for(const f of['sb','aac','pccr','adr','pkg','haz','mat','mfg','disc','quality','cage','fobCity','fobState','fobCountry']){const el=$('#qp_'+f);if(el)CFG.qp[f]=el.value.trim()}store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
+  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;CFG.tpl={subject1:$('#tS1').value,subjectN:$('#tSN').value,body:$('#tBody').value};CFG.mtarget=+$('#cMt').value||20;for(const f of['sb','aac','pccr','adr','pkg','haz','mat','mfg','disc','quality','cage','fobCity','fobState','fobCountry']){const el=$('#qp_'+f);if(el)CFG.qp[f]=el.value.trim()}if(SERVER){delete CFG.repo;delete CFG.token;await saveServerSettings()}store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
   $('#tReset').onclick=()=>{$('#tS1').value=DEF_TPL.subject1;$('#tSN').value=DEF_TPL.subjectN;$('#tBody').value=DEF_TPL.body};
   $('#cExp').onclick=()=>{const b=new Blob([JSON.stringify(CRM,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-crm-${today}.json`;a.click()};
 }
@@ -1059,7 +1162,8 @@ $('#pipeCsv').onclick=()=>csv(Object.values(pipe).map(p=>{const r=p.row;const qs
 $('#tabFind').onclick=()=>{$('#findView').classList.remove('hidden');$('#pipeView').classList.add('hidden');$('#tabFind').classList.add('on');$('#tabPipe').classList.remove('on')};
 $('#tabPipe').onclick=()=>{$('#pipeView').classList.remove('hidden');$('#findView').classList.add('hidden');$('#tabPipe').classList.add('on');$('#tabFind').classList.remove('on');renderPipe();renderSup();renderOrd()};
 
-pruneSeen(); sugRefresh(); renderViews(); chips(); pipeCount(); run(); syncBadge('Local only'); ordBadge(); (CFG.repo&&CFG.token?sync():Promise.resolve()).then(autoOutcomes);
+pruneSeen(); sugRefresh(); renderViews(); chips(); pipeCount(); run(); syncBadge('Local only'); ordBadge();
+initServer().then(m=>{if(m==='blocked')return;if(m){pruneSeen();refreshViews();return sync().then(autoOutcomes)}return (CFG.repo&&CFG.token?sync():Promise.resolve()).then(autoOutcomes)});
 </script>
 </body>
 </html>
