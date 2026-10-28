@@ -37,6 +37,30 @@ Open the failed run in the Actions tab and read the log.
 - **Award history filter:** hide NSNs where the same CAGE won the last 3 awards, or where an approved source won the last one. **Last $/ea** column shows the last awarded unit price.
 - **Click any RFQ:** RFQ PDF, solicitation page, NSN history and quote form on DIBBS, a margin calculator, pipeline status, every collected award for that NSN (CAGE, qty, unit price, contract PDF, MOD flag with package link), a **Bid = last award +3%/yr** button, and DLA award history for that FSC.
 
+## Read an RFQ PDF (fulfillment requirements)
+
+Download an RFQ PDF from DIBBS, then click **📄 Read RFQ** in the header (or **Read RFQ PDF** in an RFQ's drawer) and drop the file in. BidPilot pulls out:
+
+- delivery days, required delivery date, RDD, FOB, inspection and acceptance points, quantity variance
+- boxing and packaging: the MIL-STD-2073 codes (QUP, preservation method, wrap, cushioning, unit and intermediate containers, pack code, packing level), MIL-STD-129 marking, special marking, palletization
+- ship-to, parcel-post, freight and mark-for addresses, TCN, and transport notes (FDT, ship by fastest traceable means)
+- approved parts, drawings, quality requirement codes (RQ/RP), sampling, IUID, shelf life
+- buyer contact, set-aside, and the clauses that matter (Buy American, Berry, hazmat/SDS, WAWF, first article, IUID)
+
+It also gives a plain-English "what it takes to fulfill this line" checklist. **Save to this RFQ** stores the sheet with that RFQ in your pipeline (synced with the CRM), and **Print / save PDF** gives your supplier or packager a one-page copy. The PDF is read inside your browser and never uploaded. pdf.js (Mozilla, Apache 2.0) is bundled in `vendor/`.
+
+## Procurement history from RFQ PDFs
+
+Every RFQ PDF has a "Procurement History" table that goes back years (CAGE, contract, qty, unit price, award date). The daily job reads it for open RFQs (`ingest/history.mjs`) and keeps it permanently in `data/hist/`. That powers the **Last buy** column, the "Not procured in 2+ years" and "Never procured" filters, and the history table in each RFQ's drawer.
+
+## Past-due RFQs that are still open
+
+DLA often leaves an RFQ open long after its return-by date, and a contracting officer may ask for an updated quote. Set **Return-by** to **Past due, still Open on DIBBS** to see them.
+
+Every line that passes its return-by date is queued, and the daily job (`ingest/pastdue.mjs`) looks up its status on DIBBS's NSN search. A line is shown only when DIBBS lists it as **Open**. Closed, awarded and cancelled lines are dropped, and so is anything DIBBS doesn't list after 4 checks. Lines that are shown are re-checked every couple of days, and each one shows the date it was last seen Open.
+
+To pick up older RFQs that were posted before BidPilot started, run the workflow once by hand with **backfill** set to 180. It tries older DIBBS daily files and skips any that DIBBS no longer has.
+
 ## How award history builds
 
 The first run pulls as many past days as DIBBS still has (30 days with the backfill). After that it adds every weekday's awards and re-checks the last 7 days for late postings. History only grows, so the longer it runs, the closer it gets to NSN-Now's depth. Award PDFs are read at up to 600 per run; any backlog is finished on later runs.

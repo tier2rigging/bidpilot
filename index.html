@@ -56,6 +56,7 @@ td.nom{white-space:normal;min-width:160px}
 .calc{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px}.calc .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .verdict{border-radius:8px;padding:8px 10px;margin-top:8px;font-size:13px}.v-go{background:var(--okb);color:var(--ok)}.v-chk{background:var(--warnb);color:var(--warn)}.v-no{background:var(--acc2);color:var(--acc)}
 .sumgrid{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px;margin-top:8px}.sumgrid div:nth-child(odd){color:var(--mute)}
+#modalBox.wide{width:min(820px,100%);max-height:90vh;overflow:auto}
 #modalBox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(560px,100%)}
 .sync{font-size:12px;padding:3px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--line);cursor:pointer}
 .sync.ok{color:var(--ok);background:var(--okb)}.sync.err{color:var(--acc);background:var(--acc2)}
@@ -71,7 +72,7 @@ td.nom{white-space:normal;min-width:160px}
 <header>
   <div class="brand"><div><h1>BID<b>PILOT</b></h1><div class="tag">Government Contracting Intelligence</div></div></div>
   <span class="meta" id="meta"></span>
-  <span class="sync" id="syncBadge" title="Sync settings">Local only</span><button class="btn" id="cfgBtn" title="Settings">⚙ Settings</button>
+  <span class="sync" id="syncBadge" title="Sync settings">Local only</span><button class="btn" id="rdBtn" title="Pull the requirements out of an RFQ PDF">📄 Read RFQ</button> <button class="btn" id="cfgBtn" title="Settings">⚙ Settings</button>
   <nav><button id="tabFind" class="on" title="Find and filter solicitations">Discover</button><button id="tabPipe" title="Bids, suppliers, and orders">Manage <span id="pipeCount"></span></button></nav>
 </header>
 
@@ -106,7 +107,7 @@ td.nom{white-space:normal;min-width:160px}
       <input id="cage" placeholder="e.g. 1A2B3, 0PMV4">
       <label style="display:flex;gap:6px;align-items:center;text-transform:none;font-size:13px;font-weight:600;color:var(--ink);margin-top:12px"><input type="checkbox" id="hideSeen" style="width:auto"> Hide RFQs I've opened</label>
       <label>Award history</label>
-      <select id="hist"><option value="">Any</option><option value="has">Has award history</option><option value="nosame">Hide same winner (last 3)</option><option value="noaswon">Hide where approved source won last</option></select>
+      <select id="hist"><option value="">Any</option><option value="has">Has procurement history</option><option value="old1">Last procured over 1 year ago</option><option value="old2">Last procured over 2 years ago</option><option value="none">Never procured (per RFQ history)</option><option value="nosame">Hide same winner (last 3)</option><option value="noaswon">Hide where approved source won last</option></select>
       <div class="row2">
         <div><label>FOB</label><select id="fobF"><option value="">Any</option><option value="O">Origin</option><option value="D">Destination</option></select></div>
         <div><label>Insp./Accept.</label><select id="inspF"><option value="">Any</option><option value="O">Origin</option><option value="D">Destination</option></select></div>
@@ -117,6 +118,7 @@ td.nom{white-space:normal;min-width:160px}
         <div><label>Posted within</label><select id="posted"><option value="">Any</option><option value="0">Today</option><option value="2">2 days</option><option value="7">7 days</option></select></div></div>
       <div class="row2">
         <div><label>Closes within</label><select id="close"><option value="">Any</option><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option></select></div>
+        <div><label>Return-by</label><select id="pdF"><option value="">Still open (not past due)</option><option value="pd">Past due, still Open on DIBBS</option><option value="all">Both</option></select></div>
         <div><label>Min days left</label><select id="minleft"><option value="0">0</option><option value="2">2</option><option value="5">5</option><option value="10">10</option></select></div>
       </div>
       <div class="row2">
@@ -137,7 +139,7 @@ td.nom{white-space:normal;min-width:160px}
     <div class="bar"><strong id="count"></strong><span><button class="btn p" id="addSel">Add selected to pipeline</button> <button class="btn" id="csv">Export CSV</button></span></div>
     <div class="tw"><table>
       <thead><tr>
-        <th><input type="checkbox" id="dSelAll" style="width:auto" title="Select this page"></th><th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC</th><th data-k="15">Sources</th><th data-k="16">Last $/ea</th><th data-k="12">FOB</th><th data-k="16" title="Inspection &amp; acceptance point">Insp./Accept.</th><th data-k="11">Type</th><th>Status</th>
+        <th><input type="checkbox" id="dSelAll" style="width:auto" title="Select this page"></th><th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC</th><th data-k="15">Sources</th><th data-k="16" title="Last procurement unit price and month (RFQ history + DIBBS awards)">Last buy</th><th data-k="12">FOB</th><th data-k="16" title="Inspection &amp; acceptance point">Insp./Accept.</th><th data-k="11">Type</th><th>Status</th>
       </tr></thead>
       <tbody id="tb"></tbody>
     </table></div>
@@ -185,12 +187,26 @@ td.nom{white-space:normal;min-width:160px}
 <script src="data/rfqs.js"></script>
 <script src="data/award-summary.js"></script>
 <script src="data/my-awards.js"></script>
+<script src="data/hist-summary.js"></script>
+<script src="rfqreader.js"></script>
 <script>
 const D = window.RFQ_DATA || {rows:[]}, FSC = window.FSC_NAMES || {}, AS_SUM=(window.AWARD_SUMMARY||{}).n||{};
 const AWC={}; window.AW_LOAD=(f,rows)=>{AWC[f]=rows};
 function loadAwards(f){return new Promise(res=>{if(AWC[f])return res(AWC[f]);const sc=document.createElement('script');sc.src=`data/awards/${f}.js`;sc.onload=()=>res(AWC[f]||[]);sc.onerror=()=>res([]);document.head.appendChild(sc)})}
 const sumOf=r=>AS_SUM[r[1]];
-const asWonLast=r=>{const x=sumOf(r);return !!(x&&(r[15]||[]).some(a=>a[0]===x[1]))};
+// Procurement history read from the RFQ PDFs: [lastDate, lastUnit, lastCage, count, sameLast3, distinctCages]
+const HS=(window.HIST_SUMMARY||{}).n||{};
+const HIC={};window.HIST_LOAD=(f,o)=>{HIC[f]=o};
+function loadHist(f){return new Promise(res=>{if(HIC[f])return res(HIC[f]);const sc=document.createElement('script');sc.src=`data/hist/${f}.js`;sc.onload=()=>res(HIC[f]||{});sc.onerror=()=>res({});document.head.appendChild(sc)})}
+// Latest known procurement from either source (RFQ history or collected DIBBS awards).
+function lastAw(r){
+  const a=sumOf(r),h=HS[r[1]];let b=null;
+  if(h&&h[0])b={date:h[0],unit:h[1],cage:h[2],same:!!h[4],count:h[3]};
+  if(a&&a[2]&&(!b||a[2]>b.date))b={date:a[2],unit:a[0]>0?a[0]:(b?b.unit:null),cage:a[1],same:!!(a[4]||(b&&b.same)),count:Math.max(a[3]||0,b?b.count:0)};
+  return b;
+}
+const histRead=r=>!!(HS[r[1]]||sumOf(r));
+const asWonLast=r=>{const x=lastAw(r);return !!(x&&(r[15]||[]).some(a=>a[0]===x.cage))};
 const FILES='https://dibbs2.bsm.dla.mil', DIBBS='https://www.dibbs.bsm.dla.mil';
 const FSG={10:'Weapons',11:'Nuclear ordnance',12:'Fire control',13:'Ammunition & explosives',14:'Guided missiles',15:'Aircraft & airframe',16:'Aircraft components',17:'Aircraft launch/ground handling',18:'Space vehicles',19:'Ships & small craft',20:'Ship & marine equipment',22:'Railway equipment',23:'Ground vehicles',24:'Tractors',25:'Vehicle components',26:'Tires & tubes',28:'Engines & turbines',29:'Engine accessories',30:'Power transmission',31:'Bearings',32:'Woodworking machinery',34:'Metalworking machinery',35:'Service & trade equipment',36:'Special industry machinery',37:'Agricultural machinery',38:'Construction & mining',39:'Materials handling',40:'Rope, cable, chain & fittings',41:'Refrigeration & A/C',42:'Fire fighting, rescue & safety',43:'Pumps & compressors',44:'Furnace & drying equipment',45:'Plumbing & heating',46:'Water purification',47:'Pipe, hose & fittings',48:'Valves',49:'Shop equipment',51:'Hand tools',52:'Measuring tools',53:'Hardware & abrasives',54:'Prefab structures',55:'Lumber & plywood',56:'Construction materials',58:'Communication & radar',59:'Electrical & electronic components',60:'Fiber optics',61:'Electric wire & power',62:'Lighting',63:'Alarm & security',65:'Medical & dental',66:'Instruments & lab',67:'Photographic',68:'Chemicals',69:'Training aids',70:'IT equipment',71:'Furniture',72:'Furnishings',73:'Food prep & serving',74:'Office machines',75:'Office supplies',76:'Books & maps',77:'Musical & radios',78:'Recreational & athletic',79:'Cleaning supplies',80:'Brushes, paints & adhesives',81:'Containers & packaging',83:'Textiles, leather & tents',84:'Clothing & individual equipment',85:'Toiletries',87:'Agricultural supplies',88:'Live animals',89:'Subsistence',91:'Fuels & lubricants',93:'Nonmetallic fabricated materials',94:'Nonmetallic crude materials',95:'Metal bars & sheets',96:'Ores & minerals',99:'Miscellaneous'};
 const SA={N:'Unrestricted',Y:'Small Bus.',L:'WOSB',E:'EDWOSB',H:'HUBZone',R:'SDVOSB',A:'8(a)'};
@@ -301,7 +317,7 @@ $('#saBox').addEventListener('change',()=>{page=0;run()});
 let _nlTxt=null,_nl=null;
 function nsnListSet(){const t=$('#nsnList').value;if(t===_nlTxt)return _nl;_nlTxt=t;const toks=t.split(/[\s,;]+/).map(x=>x.replace(/-/g,'').toUpperCase()).filter(x=>x.length>=3);_nl=toks.length?new Set(toks):null;$('#nsnListN').textContent=_nl?`${_nl.size} NSNs / part numbers`:'';return _nl}
 // Saved views: every filter, the FSC list and the sort, saved under a name. Synced with the CRM.
-const VIEW_IDS=['q','nsnList','posted','fsg','amsc','asf','cage','hist','fobF','inspF','type','close','minleft','qmin','qmax'];
+const VIEW_IDS=['q','nsnList','pdF','posted','fsg','amsc','asf','cage','hist','fobF','inspF','type','close','minleft','qmin','qmax'];
 let curView='';
 function captureView(){const v={};for(const id of VIEW_IDS)v[id]=$('#'+id).value;v.hideSeen=$('#hideSeen').checked;v.sa=[...document.querySelectorAll('#saBox input:checked')].map(i=>i.value);v.fsc=[...fscSel];v.sortK=sortK;v.sortDir=sortDir;return v}
 function applyView(v){for(const id of VIEW_IDS)$('#'+id).value=v[id]??(id==='minleft'?'0':'');$('#hideSeen').checked=!!v.hideSeen;document.querySelectorAll('#saBox input').forEach(i=>i.checked=(v.sa||[]).includes(i.value));fscSel=new Set(v.fsc||[]);sortK=v.sortK??8;sortDir=v.sortDir??1;page=0;chips();run()}
@@ -352,17 +368,22 @@ $('#fFindGo').onclick=runFind;$('#fFind').addEventListener('keydown',e=>{if(e.ke
 function filt(skipFsc){
   const saSet=new Set([...document.querySelectorAll('#saBox input:checked')].map(i=>i.value)), posted=$('#posted').value, nl=nsnListSet(), hideSeen=$('#hideSeen').checked, fobF=$('#fobF').value, inspF=$('#inspF').value, hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, am=$('#amsc').value, ty=$('#type').value;
   const cl=+$('#close').value||0, ml=+$('#minleft').value||0, qmin=+$('#qmin').value||0, qmax=+$('#qmax').value||0;
+  const pdF=$('#pdF').value;
   return D.rows.filter(r=>{
     const as=r[15]||[];
+    if(pdF===''&&r[17])return false;
+    if(pdF==='pd'&&!r[17])return false;
     if(q && !(`${r[0]} ${r[1]} ${r[4]} ${r[2]} ${as.map(a=>a.join(' ')).join(' ')}`.toLowerCase().replace(/-/g,'').includes(q)))return false;
     if(hideSeen && seen(r))return false;
     if(posted!=='' && r[7] && -daysLeft(r[7])>+posted)return false;
     if(nl && !nl.has(String(r[1]).replace(/[-\s]/g,'').toUpperCase()) && !as.some(a=>nl.has(String(a[1]).replace(/[-\s]/g,'').toUpperCase())))return false;
     if(fobF && r[12]!==fobF)return false;
     if(inspF && r[16]!==inspF)return false;
-    const sm=sumOf(r);
-    if(hist==='has'&&!sm)return false;
-    if(hist==='nosame'&&sm&&sm[4])return false;
+    const la=hist?lastAw(r):null;
+    if(hist==='has'&&!la)return false;
+    if(hist==='none'&&(la||!histRead(r)))return false;
+    if((hist==='old1'||hist==='old2')&&!(la&&-daysLeft(la.date)>(hist==='old1'?365:730)))return false;
+    if(hist==='nosame'&&la&&la.same)return false;
     if(hist==='noaswon'&&asWonLast(r))return false;
     if(asf==='none'&&as.length)return false;
     if(asf==='has'&&!as.length)return false;
@@ -375,16 +396,21 @@ function filt(skipFsc){
     if(am==='restricted'&&openAmsc(r[10]))return false;
     if(ty && (r[11]||'M')!==ty)return false;
     const dl=daysLeft(r[8]);
-    if(cl && dl!==null && dl>cl)return false;
-    if(ml && dl!==null && dl<ml)return false;
+    if(!r[17]&&cl && dl!==null && dl>cl)return false;
+    if(!r[17]&&ml && dl!==null && dl<ml)return false;
     if(qmin && (r[5]||0)<qmin)return false;
     if(qmax && (r[5]||0)>qmax)return false;
     return true;
   });
 }
+let PD_STATE=0; // 0 not loaded, 1 loading, 2 loaded
+window.PASTDUE_LOAD=d=>{const have=new Set(D.rows.map(key));let n=0;for(const r of d.rows||[]){if(have.has(key(r)))continue;D.rows.push(r);n++}PD_STATE=2;PD_N=n;const o=$('#pdF option[value="pd"]');if(o)o.textContent=`Past due, still Open on DIBBS (${n.toLocaleString()})`;run()};
+let PD_N=0;
+function loadPastDue(){if(PD_STATE)return;PD_STATE=1;const s=document.createElement('script');s.src='data/pastdue.js?'+Date.now().toString(36).slice(0,-4);s.onerror=()=>{PD_STATE=2;const o=$('#pdF option[value="pd"]');if(o)o.textContent='Past due (not built yet: runs with the daily job)';run()};document.head.appendChild(s)}
 function run(){
+  if($('#pdF').value&&!PD_STATE)loadPastDue();
   filtered=filt(false);
-  filtered.sort((a,b)=>{let x=a[sortK],y=b[sortK];if(sortK===15){x=(x||[]).length;y=(y||[]).length}if(sortK===16){x=(sumOf(a)||[])[0]||0;y=(sumOf(b)||[])[0]||0}return (typeof x==='number'||typeof y==='number'?(x||0)-(y||0):String(x||'').localeCompare(String(y||'')))*sortDir});
+  filtered.sort((a,b)=>{let x=a[sortK],y=b[sortK];if(sortK===15){x=(x||[]).length;y=(y||[]).length}if(sortK===16){x=(lastAw(a)||{}).unit||0;y=(lastAw(b)||{}).unit||0}return (typeof x==='number'||typeof y==='number'?(x||0)-(y||0):String(x||'').localeCompare(String(y||'')))*sortDir});
   page=Math.min(page,Math.max(0,Math.ceil(filtered.length/PER)-1));
   $('#count').textContent=`${filtered.length.toLocaleString()} RFQ lines`;
   renderTable(); renderFscList();
@@ -393,19 +419,27 @@ function badge(r){const p=pipe[key(r)];return p?`<span class="tag t-acc">${p.sta
 function renderTable(){
   const rows=filtered.slice(page*PER,(page+1)*PER);
   $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]),sn=seen(r);return `<tr data-i="${page*PER+i}" class="${sn?'seen':'new'}" title="${sn?'Opened '+esc(new Date(CRM.viewed[vkey(r)].saved).toLocaleDateString()):'Not opened yet'}">
-    <td><input type="checkbox" class="dsel" data-i="${page*PER+i}" ${DSEL.has(key(r))?'checked':''} style="width:auto"></td><td>${sn?'':'<span class="dot"></span>'}${r[8]||''} <span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span></td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
+    <td><input type="checkbox" class="dsel" data-i="${page*PER+i}" ${DSEL.has(key(r))?'checked':''} style="width:auto"></td><td>${sn?'':'<span class="dot"></span>'}${r[8]||''} ${r[17]?`<span class="tag t-warn" title="Return-by date passed, but DIBBS showed it Open on ${r[17]}. DLA may still take quotes.">past due · open</span>`:`<span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span>`}</td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
     <td class="nom">${esc(r[4])}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
     <td>${SA[r[9]]||r[9]}</td><td>${r[10]?`<span class="tag ${openAmsc(r[10])?'t-ok':'t-warn'}" title="${esc(AMSC[r[10]]||'')}">${r[10]}</span>`:''}</td>
-    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=sumOf(r);if(!m)return '';return `${m[0]>0?'$'+m[0].toFixed(2):''}${m[4]?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="15" class="small">No RFQs match.</td></tr>`;
+    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=lastAw(r);if(!m)return histRead(r)?'<span class="small">never</span>':'';const yrs=-daysLeft(m.date)/365;return `${m.unit>0?'$'+(+m.unit).toFixed(2):''}<br><span class="small ${yrs>=2?'':''}" title="Last procured ${esc(m.date)} by CAGE ${esc(m.cage)}">${esc(m.date.slice(0,7))}${yrs>=2?' · '+Math.floor(yrs)+'y':''}</span>${m.same?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="15" class="small">${noMatchMsg()}</td></tr>`;
   const pages=Math.max(1,Math.ceil(filtered.length/PER));$('#pg').textContent=`Page ${page+1} of ${pages}`;
+}
+function noMatchMsg(){
+  const toks=[...new Set((($('#q').value||'')+' '+($('#nsnList').value||'')).split(/[\s,;]+/).map(x=>x.replace(/-/g,'')).filter(x=>/^\d{13}$/.test(x)))];
+  const shown=new Set(D.rows.map(r=>r[1]));
+  const closed=toks.filter(n=>!shown.has(n));
+  if(!closed.length)return 'No RFQs match. Try clearing a filter or two.';
+  return `<b>No open RFQ right now for ${closed.slice(0,5).map(fmtNsn).join(', ')}${closed.length>5?' …':''}.</b> BidPilot lists solicitations that are open today (${D.rows.length.toLocaleString()} lines), so an NSN you won before only shows up when DLA buys it again. Save this search as a view and check it each day.<br>`+
+    closed.slice(0,5).map(n=>`${fmtNsn(n)}: <a target="_blank" rel="noopener" href="${DIBBS}/RFQ/RFQNsn.aspx?value=${n}&category=issue&Scope=">DIBBS RFQs</a> · <a target="_blank" rel="noopener" href="https://www.dibbs.bsm.dla.mil/Awards/AwdRecs.aspx?Category=nsn&TypeSrch=cq&Value=${n}">DIBBS awards</a> · <a target="_blank" rel="noopener" href="https://www.nsn-now.com/Indexing/ViewDetail.aspx?QString=${n}">NSN-Now</a>`).join('<br>');
 }
 function renderFscList(){
   const c={};for(const r of filt(true))if(r[3])c[r[3]]=(c[r[3]]||0)+1;
   $('#fscList').innerHTML=Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,150).map(([f,n])=>`<div data-f="${f}"><span>${f} ${esc((FSC[f]||'').slice(0,30))}</span><b>${n}</b></div>`).join('')||'<div class="small">None</div>';
 }
 $('#fscList').onclick=e=>{const d=e.target.closest('[data-f]');if(d){fscSel.add(d.dataset.f);chips();run()}};
-['#q','#nsnList','#posted','#fsg','#amsc','#asf','#cage','#hist','#hideSeen','#fobF','#inspF','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
-$('#reset').onclick=()=>{document.querySelectorAll('#saBox input').forEach(i=>i.checked=false);curView='';renderViews();['#q','#nsnList','#posted','#fsg','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();$('#hideSeen').checked=false;chips();run()};
+['#q','#nsnList','#pdF','#posted','#fsg','#amsc','#asf','#cage','#hist','#hideSeen','#fobF','#inspF','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
+$('#reset').onclick=()=>{document.querySelectorAll('#saBox input').forEach(i=>i.checked=false);curView='';renderViews();['#q','#nsnList','#pdF','#posted','#fsg','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();$('#hideSeen').checked=false;chips();run()};
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=+th.dataset.k;sortDir=sortK===k?-sortDir:1;sortK=k;run()});
 $('#prev').onclick=()=>{if(page>0){page--;renderTable()}};
 $('#next').onclick=()=>{if((page+1)*PER<filtered.length){page++;renderTable()}};
@@ -444,7 +478,7 @@ function openDrawer(r){
     <div>NSN</div><div>${fmtNsn(r[1])}</div>
     <div>FSC</div><div>${r[3]} ${esc(FSC[r[3]]||'')}</div>
     <div>Qty</div><div>${r[5]??''} ${r[6]||''}</div>
-    <div>Return by</div><div>${r[8]} (${daysLeft(r[8])} days)</div>
+    <div>Return by</div><div>${r[8]} ${r[17]?`<span class="tag t-warn">past due</span> <span class="small">DIBBS showed it Open on ${r[17]}. DLA may still take or ask for updated quotes. Confirm on the solicitation page.</span>`:`(${daysLeft(r[8])} days)`}</div>
     <div>Posted</div><div>${r[7]||''}</div>
     <div>Set-aside</div><div>${SA[r[9]]||r[9]}</div>
     <div>AMSC</div><div>${r[10]?`${r[10]}: ${esc(AMSC[r[10]]||'')}`:'—'}</div>
@@ -455,6 +489,8 @@ function openDrawer(r){
     <div>Delivery days</div><div>${r[13]??'—'}</div>
     <div>PR</div><div>${r[2]||''}</div>
   </div>
+  <h3 style="font-size:15px;margin:14px 0 4px">Requirements to fulfill (from the RFQ PDF)</h3>
+  ${p.req?`<details><summary class="small" style="cursor:pointer">Read from ${esc(p.req.file||'the PDF')} on ${esc((p.req.read||'').slice(0,10))}. Click to show packaging, shipping and quality requirements.</summary>${reqSheet(p.req)}</details><button class="btn" id="dReq2" style="margin-top:6px">Print requirements</button> <button class="btn" id="dReq">Read again</button>`:`<div class="small">Download the RFQ PDF, then read it to get packaging/boxing, shipping, inspection and quality requirements.</div><button class="btn" id="dReq" style="margin-top:6px">📄 Read RFQ PDF</button>`}
   <h3 style="font-size:15px;margin:14px 0 4px">Approved sources</h3>
   ${(r[15]||[]).length?`<div class="small">DLA will only accept these exact parts. As a reseller, buy from the CAGE or an authorized distributor and keep traceability.</div>
   <table class="aw"><tbody>${r[15].map(([c,pn])=>`<tr><td><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(c)}&page=1">${esc(c)}</a></td><td>${esc(pn)}</td><td><a target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent('"'+pn+'"')}">Find distributors</a></td></tr>`).join('')}</tbody></table>`
@@ -490,6 +526,9 @@ function openDrawer(r){
   <div style="margin-top:8px"><button class="btn p" id="psave">Save</button></div>
   ${(()=>{const rel=D.rows.filter(x=>x[1]===r[1]&&key(x)!==key(r));return rel.length?`<h3 style="font-size:15px;margin:18px 0 4px">Related open RFQs: same NSN (${rel.length})</h3>
   <table class="aw"><tbody>${rel.slice(0,15).map(x=>`<tr class="relGo" data-k="${esc(key(x))}" style="cursor:pointer"><td>${esc(x[0])}</td><td>Qty ${x[5]??''} ${esc(x[6]||'')}</td><td>closes ${esc(x[8]||'')}</td><td>${pipe[key(x)]?`<span class="tag t-acc">${esc(pipe[key(x)].status)}</span>`:''}</td></tr>`).join('')}</tbody></table>`:''})()}
+  <h3 style="font-size:15px;margin:18px 0 4px">Procurement history: from the RFQ</h3>
+  <div class="small">DLA's own history table printed in the solicitation. "P0000x" on a contract number means it was modified.</div>
+  <div id="rfqHist" class="small" style="margin-top:8px">Loading…</div>
   <h3 style="font-size:15px;margin:18px 0 4px">Award history — this NSN</h3>
   <div class="small">Collected daily from DIBBS awards and kept permanently. Cancelled ($0) and modified awards are flagged.</div>
   <div id="nsnAw" class="small" style="margin-top:8px">Loading…</div>
@@ -530,18 +569,30 @@ function openDrawer(r){
   dr.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>save(b.dataset.s));
   $('#psave').onclick=()=>save();
   dr.querySelectorAll('.relGo').forEach(t=>t.onclick=()=>{const x=D.rows.find(y=>key(y)===t.dataset.k);if(x)openDrawer(x)});
+  $('#dReq').onclick=()=>readerModal(r); if($('#dReq2'))$('#dReq2').onclick=()=>printReq(p.req);
   renderQuotes(r);
   awards(r[3]);
   nsnAwards(r);
+}
+function renderRfqHist(r,rows){
+  const el=$('#rfqHist');if(!el)return;
+  if(rows===null){el.textContent='Not read yet. The daily job reads each RFQ\'s PDF; check back after the next run.';return}
+  if(!rows.length){el.innerHTML='<b>No procurement history</b> in the RFQ. This NSN may never have been bought, or not in years.';return}
+  const asC=new Set((r[15]||[]).map(a=>a[0]));
+  el.innerHTML=`<table class="aw"><tbody><tr><td><b>Date</b></td><td><b>CAGE</b></td><td><b>Qty</b></td><td><b>$/ea</b></td><td><b>Contract</b></td></tr>${rows.map(x=>`<tr><td>${esc(x[4])}</td><td><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(x[0])}&page=1">${esc(x[0])}</a>${asC.has(x[0])?' <span class="tag t-acc">AS</span>':''}</td><td>${x[2]}</td><td>$${(+x[3]).toFixed(2)}</td><td>${esc(x[1])}${/P\d{5}$/.test(x[1])?' <span class="tag t-warn">MOD</span>':''}${x[5]==='Y'?' <span class="tag t-warn">surplus</span>':''}</td></tr>`).join('')}</tbody></table>`;
 }
 async function nsnAwards(r){
   const el=$('#nsnAw'), f=/^\d{13}$/.test(r[1])?r[1].slice(0,4):'other';
   const list=(await loadAwards(f)).filter(a=>a[8]===r[1]).sort((a,b)=>(b[6]||'').localeCompare(a[6]||''));
   const asC=new Set((r[15]||[]).map(a=>a[0]));
-  const priced=list.find(a=>a[15]>0&&a[5]!==0);
+  const hrows=((await loadHist(f))[r[1]])||null;
+  renderRfqHist(r,hrows);
+  let priced=list.find(a=>a[15]>0&&a[5]!==0);
+  const h0=hrows&&hrows.find(x=>x[3]>0);
+  if(h0&&(!priced||h0[4]>priced[6]))priced=[null,null,null,null,h0[0],null,h0[4],null,null,null,null,null,null,h0[2],'',h0[3]];
   const btn=$('#lastAw');
   if(priced){const yrs=(new Date(today)-new Date(priced[6]))/3.156e10, bid=priced[15]*Math.pow(1.03,Math.max(0,yrs));
-    $('#lastAwNote').textContent=`Last award $${priced[15].toFixed(2)}/ea on ${priced[6]} (CAGE ${priced[4]}).`;
+    $('#lastAwNote').textContent=`Last procurement $${priced[15].toFixed(2)}/ea on ${priced[6]} (CAGE ${priced[4]}).${yrs>=1?` That's ${yrs.toFixed(1)} years ago, so the +3%/yr adjustment matters.`:''}`;
     DR_PTW=bid;btn.onclick=()=>{$('#pb2').value=bid.toFixed(2);mcalc()};mcalc()}
   else{btn.disabled=true;$('#lastAwNote').textContent='No priced award collected yet for this NSN.'}
   if(!list.length){el.textContent='No awards collected for this NSN yet. History builds from the first daily run onward.';return}
@@ -623,7 +674,119 @@ $('#supQ').oninput=renderSup;$('#supV').onchange=renderSup;
 $('#sb').onclick=e=>{const g=e.target.closest('.cageGo');if(g){e.preventDefault();$('#tabFind').click();$('#cage').value=g.dataset.c;page=0;run();return}if(e.target.closest('a'))return;const tr=e.target.closest('tr[data-id]');if(tr)supForm(CRM.suppliers[tr.dataset.id])};
 $('#supAdd').onclick=()=>supForm({});
 $('#supCsv').onclick=()=>csv(sups().map(s=>[s.name,s.cage,s.contact,s.email,s.phone,s.website,s.notes]),['Name','CAGE','Contact','Email','Phone','Website','Notes']);
-function modal(html){$('#modalBox').innerHTML=html;$('#modalBg').classList.remove('hidden')}
+function modal(html){$('#modalBox').classList.remove('wide');$('#modalBox').innerHTML=html;$('#modalBg').classList.remove('hidden')}
+// ---------- RFQ reader (requirements from the RFQ PDF; the file never leaves this browser) ----------
+let _pdfjs=null;
+function loadPdfJs(){if(_pdfjs)return _pdfjs;_pdfjs=new Promise((ok,bad)=>{const s=document.createElement('script');s.src='vendor/pdf.min.js';s.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='vendor/pdf.worker.min.js';ok(pdfjsLib)};s.onerror=()=>{_pdfjs=null;bad(new Error('Could not load the PDF reader (vendor/pdf.min.js).'))};document.head.appendChild(s)});return _pdfjs}
+const PKG_HELP={'PRES MTHD':{'10':'Method 10: physical protection only, no preservative'},'PACKING LEVEL':{'A':'Level A: maximum protection','B':'Level B: moderate protection','C':'Level C: minimum protection'}};
+const pkgMeaning=(c,v)=>(PKG_HELP[c]||{})[v]||(/^0+$/.test(v)?'None required':v==='ZZ'?'Special: see the RFQ notes / drawing':v==='NA'?'Not applicable':'');
+function reqChecklist(res,it){
+  const c=[],has=n=>res.clauses.some(x=>x[0]===n);
+  if(it.deliveryDays)c.push(`Deliver within <b>${+it.deliveryDays} days</b> after award.`);
+  if(it.fob==='ORIGIN')c.push('<b>FOB Origin</b>: DLA pays freight. You request pickup/routing (FDT / VSM) when ready to ship. Don\'t add freight to your price.');
+  if(it.fob==='DESTINATION')c.push('<b>FOB Destination</b>: you pay and arrange freight to the ship-to address. Build freight into your price.');
+  if(it.inspection==='ORIGIN')c.push('<b>Origin inspection</b>: a government QAR (DCMA) inspects before shipment, at your or your supplier\'s location. Plan time for it.');
+  if(it.inspection==='DESTINATION')c.push('<b>Destination inspection</b>: the government inspects on receipt. No QAR visit before shipping.');
+  if(/0%.*0%/.test(it.qtyVariance||''))c.push('Quantity variance is 0%: ship the exact quantity.');
+  if(it.approved.length)c.push(`Offer one of the <b>${it.approved.length} approved part${it.approved.length>1?'s':''}</b> exactly, and keep traceability (manufacturer CoC / distributor invoice).`);
+  if(it.drawing)c.push('Drawing / technical data referenced. Check cFolders before quoting.');
+  if(it.packaging.length)c.push(`<b>Military packaging</b> per ${esc(it.pkgStd||'MIL-STD-2073')} (codes below). Confirm your supplier or a packager can do it, and price it in.`);
+  if(it.marking||res.standards.some(s=>/129/.test(s)))c.push('<b>MIL-STD-129 marking</b>: military shipping label (MSL) with bar codes on each unit, intermediate and exterior container.');
+  if(it.palletization)c.push('Palletize per RP001 when shipping multiple boxes.');
+  if(it.iuid&&!/not required/i.test(it.iuid))c.push('<b>IUID</b> marking may be required (2D data matrix). Read the IUID note.');
+  if(it.transport.some(t=>/FASTEST|NMCS|777|999|EXPEDITE/i.test(t)))c.push('<b>Priority shipment</b>: ship by the fastest traceable means.');
+  if(it.reqCodes.some(x=>x[0]==='RQ017'))c.push('Item must have physical identification / bare-item marking (RQ017).');
+  if(has('252.225-7001')||has('252.225-7012'))c.push('Domestic-source clauses present (Buy American / Berry). Confirm the country of origin with your supplier.');
+  if(has('52.223-3'))c.push('If the item is hazardous: an SDS is required with your offer and shipment.');
+  if(has('252.232-7006'))c.push('Invoice through WAWF / PIEE after shipment.');
+  return c;
+}
+function reqSheet(res){
+  const H=res.header,A=a=>a&&a.length?a.map(esc).join('<br>'):'—';
+  return `<div class="reqs"><div class="kv">
+    <div>Solicitation</div><div><b>${esc(H.solicitation||'?')}</b>${H.setAside?` <span class="tag t-acc">${esc(H.setAside)}</span>`:''}</div>
+    <div>Issued / due</div><div>${esc(H.issued||'?')} → <b>${esc(H.returnBy||'?')}</b></div>
+    ${H.buyer?`<div>Buyer</div><div>${esc(H.buyer)} ${H.buyerCode?`(${esc(H.buyerCode)})`:''} ${esc(H.buyerPhone||'')} ${H.buyerEmail?`<a href="mailto:${esc(H.buyerEmail)}">${esc(H.buyerEmail)}</a>`:''}</div>`:''}
+    ${H.issuedBy?`<div>Issued by</div><div>${esc(H.issuedBy)}</div>`:''}
+  </div>
+  ${res.items.map((it,n)=>`<h4 style="margin:14px 0 4px">Line ${esc(it.clin||String(n+1))}: ${esc(it.description||'')} · NSN ${esc(fmtNsn(it.nsn||''))} · ${it.qty??''} ${esc(it.unit||'')}</h4>
+    <div class="small" style="margin-bottom:4px">What it takes to fulfill this line:</div>
+    <ul style="margin:0 0 8px 18px;padding:0;font-size:13px">${reqChecklist(res,it).map(x=>`<li>${x}</li>`).join('')}</ul>
+    <div class="kv">
+      <div>Delivery</div><div>${it.deliveryDays?+it.deliveryDays+' days':'—'}${it.requiredDelivery?` · original required date ${esc(it.requiredDelivery)}`:''}${it.rdd?` · RDD ${esc(it.rdd)}`:''}</div>
+      <div>FOB</div><div>${esc(it.fob||'—')}</div>
+      <div>Inspection / acceptance</div><div>${esc(it.inspection||'—')} / ${esc(it.acceptance||'—')}</div>
+      <div>Qty variance</div><div>${esc(it.qtyVariance||'—')}</div>
+      <div>Approved parts</div><div>${it.approved.length?it.approved.map(([nm,c,p])=>`${esc(nm)} · CAGE ${esc(c)} · P/N <b>${esc(p)}</b>`).join('<br>'):'—'}</div>
+      ${it.drawing?`<div>Drawing / TDP</div><div>${esc(it.drawing)}</div>`:''}
+    </div>
+    <h4 style="margin:10px 0 4px;font-size:13px">Boxing / packaging (${esc(it.pkgStd||'—')})</h4>
+    ${it.packaging.length?`<table class="aw"><tbody>${it.packaging.map(([c,l,v])=>`<tr><td>${esc(l)}<br><span class="small">${esc(c)}</span></td><td><b>${esc(v)}</b></td><td class="small">${esc(pkgMeaning(c,v))}</td></tr>`).join('')}</tbody></table>`:'<div class="small">No packaging codes found.</div>'}
+    <div class="kv" style="margin-top:6px">
+      <div>Marking</div><div>${esc(it.marking||'—')}${it.specialMarking?`<br><span class="small">Special marking: ${esc(it.specialMarking)}</span>`:''}</div>
+      ${it.packagingNote?`<div>Packaging note</div><div>${esc(it.packagingNote)}</div>`:''}
+      <div>Palletization</div><div>${esc(it.palletization||'—')}</div>
+    </div>
+    <h4 style="margin:10px 0 4px;font-size:13px">Shipping</h4>
+    <div class="kv">
+      <div>Ship to</div><div>${A(it.shipTo)}</div>
+      ${it.parcelTo.length?`<div>Parcel post to</div><div>${A(it.parcelTo)}</div>`:''}
+      <div>Freight to</div><div>${A(it.freightTo)}</div>
+      ${it.markFor.length?`<div>Mark for</div><div>${A(it.markFor)}</div>`:''}
+      <div>TCN</div><div>${esc(it.tcn||'—')}</div>
+      <div>Transport notes</div><div>${A(it.transport)}</div>
+    </div>
+    <h4 style="margin:10px 0 4px;font-size:13px">Quality &amp; other</h4>
+    <div class="kv">
+      <div>Requirement codes</div><div>${it.reqCodes.length?it.reqCodes.map(([c,t])=>`<b>${esc(c)}</b> ${esc(t)}`).join('<br>'):'—'}</div>
+      ${it.sampling?`<div>Sampling</div><div class="small">${esc(it.sampling)}</div>`:''}
+      <div>IUID</div><div>${esc(it.iuid||'—')}</div>
+      <div>Shelf life</div><div>${esc(it.shelfLife||'—')}</div>
+    </div>`).join('')}
+  ${res.clauses.length?`<h4 style="margin:12px 0 4px;font-size:13px">Clauses that matter</h4><div style="font-size:13px">${res.clauses.map(([n,l])=>`<b>${esc(n)}</b> ${esc(l)}`).join('<br>')}</div>`:''}
+  ${res.standards.length?`<h4 style="margin:12px 0 4px;font-size:13px">Standards referenced</h4><div style="font-size:13px">${res.standards.map(esc).join('<br>')}</div>`:''}
+  ${res.notes.length?`<h4 style="margin:12px 0 4px;font-size:13px">Notes</h4><div style="font-size:13px">${res.notes.map(esc).join('<br>')}</div>`:''}
+  <div class="small" style="margin-top:10px">Read automatically from the RFQ PDF. Always confirm against the PDF before you bid.</div></div>`;
+}
+function rowsFromReq(res){const H=res.header,sol=(H.solicitation||'').replace(/-/g,''),sa=H.setAside||'',
+  saC=/HUBZONE/i.test(sa)?'H':/SERVICE|SDVOSB/i.test(sa)?'R':/EDWOSB|ECONOMICALLY/i.test(sa)?'E':/WOMEN|WOSB/i.test(sa)?'L':/8\(A\)/i.test(sa)?'A':/SMALL/i.test(sa)?'Y':'N',OD1=v=>v==='ORIGIN'?'O':v==='DESTINATION'?'D':'';
+  return res.items.map(it=>[sol,it.nsn||'',it.pr||'',(it.nsn||'').slice(0,4),(it.description||'').slice(0,21),it.qty??null,it.unit||'',H.issued||'',H.returnBy||'',saC,'','',OD1(it.fob),it.deliveryDays?+it.deliveryDays:null,sol+'.pdf',it.approved.map(a=>[a[1],a[2]]),OD1(it.inspection)])}
+function matchRow(res){const it=res.items[0]||{},sol=(res.header.solicitation||'').replace(/-/g,'');if(!sol)return null;return D.rows.find(r=>r[0]===sol&&(!it.pr||r[2]===it.pr))||D.rows.find(r=>r[0]===sol)}
+function printReq(res){const w=window.open('','_blank');if(!w)return alert('Allow pop-ups to print.');w.document.write(`<!doctype html><meta charset="utf-8"><title>${esc(res.header.solicitation||'RFQ')} requirements</title><style>body{font:13px/1.45 system-ui,sans-serif;margin:24px;color:#111}.kv{display:grid;grid-template-columns:150px 1fr;gap:3px 10px}.kv div:nth-child(odd){color:#555}table{border-collapse:collapse;width:100%}td{border-bottom:1px solid #ddd;padding:3px 6px;vertical-align:top}.small{color:#555;font-size:12px}.tag{border:1px solid #999;border-radius:4px;padding:0 4px;font-size:11px}a{color:#111}</style><h2>Fulfillment requirements: ${esc(res.header.solicitation||'')}</h2>${reqSheet(res)}`);w.document.close();setTimeout(()=>w.print(),300)}
+function readerModal(forRow){
+  modal(`<div class="bar" style="display:flex;justify-content:space-between;align-items:center"><strong>Read an RFQ PDF</strong><button class="btn" id="rdClose">Close ✕</button></div>
+  <div class="small" style="margin:6px 0 10px">${forRow?`Download the RFQ PDF for <b>${esc(forRow[0])}</b> (the red RFQ PDF button), then drop it here.`:'Drop a DLA RFQ PDF (downloaded from DIBBS) here.'} BidPilot pulls out delivery, FOB, inspection, packaging/boxing, marking, ship-to and quality requirements. The file stays in your browser.</div>
+  <label id="rdDrop" style="display:block;border:2px dashed var(--line);border-radius:10px;padding:26px;text-align:center;cursor:pointer">Drop the PDF here or click to choose<input type="file" id="rdFile" accept="application/pdf,.pdf" style="display:none"></label>
+  <div id="rdOut" style="margin-top:12px"></div>`);
+  $('#modalBox').classList.add('wide');
+  $('#rdClose').onclick=closeReader;
+  const drop=$('#rdDrop');
+  drop.ondragover=e=>{e.preventDefault();drop.style.borderColor='var(--acc)'};drop.ondragleave=()=>drop.style.borderColor='';
+  drop.ondrop=e=>{e.preventDefault();drop.style.borderColor='';const f=e.dataTransfer.files[0];if(f)readPdf(f,forRow)};
+  $('#rdFile').onchange=e=>{const f=e.target.files[0];if(f)readPdf(f,forRow)};
+}
+function closeReader(){$('#modalBox').classList.remove('wide');$('#modalBg').classList.add('hidden')}
+async function readPdf(file,forRow){
+  const out=$('#rdOut');out.innerHTML='<div class="small">Reading…</div>';
+  try{
+    const lib=await loadPdfJs();
+    const lines=await RfqReader.pdfToLines(lib,new Uint8Array(await file.arrayBuffer()));
+    const res=RfqReader.parse(lines);
+    if(!res.header.solicitation&&!res.items.length){out.innerHTML='<div class="small">This doesn\'t look like a DLA RFQ (no solicitation number or line items found). If it\'s a scanned PDF, it can\'t be read as text.</div>';return}
+    res.file=file.name;res.read=nowIso();
+    const row=matchRow(res)||forRow;
+    out.innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="btn p" id="rdSave">${row?'Save to this RFQ in my pipeline':'Add to my pipeline'}</button><button class="btn" id="rdCopy">Copy as text</button><button class="btn" id="rdPrint">Print / save PDF</button>${row?'<button class="btn" id="rdOpen">Open the RFQ</button>':''}</div>${forRow&&res.header.solicitation&&res.header.solicitation.replace(/-/g,'')!==forRow[0]?`<div class="tag t-warn" style="margin-bottom:8px">Heads up: this PDF is ${esc(res.header.solicitation)}, not ${esc(forRow[0])}.</div>`:''}${reqSheet(res)}`;
+    if(row){$('#rdSave').onclick=()=>{const k=key(row);pipe[k]={...(pipe[k]||{status:'Watching',row}),req:res,saved:nowIso()};autoSuppliers(row);crmSave();pipeCount();renderTable();$('#rdSave').textContent='Saved ✓'};
+      $('#rdOpen').onclick=()=>{closeReader();openDrawer(row)}}else{const rows=rowsFromReq(res).filter(r=>r[0]);
+      if(!rows.length)$('#rdSave').disabled=true;
+      else{$('#rdOut').insertAdjacentHTML('afterbegin',`<div class="tag t-warn" style="margin-bottom:8px;display:inline-block">${esc(res.header.solicitation||'')} isn't in BidPilot's open list${res.header.returnBy&&daysLeft(res.header.returnBy)<0?' (its return-by date has passed, but DLA can keep it open and ask for updated quotes)':''}. Add it to your pipeline to track it.</div>`);
+      $('#rdSave').onclick=()=>{let last;for(const r of rows){const k=key(r);pipe[k]={...(pipe[k]||{status:'Watching'}),row:r,manual:true,req:res,saved:nowIso()};autoSuppliers(r);last=r}crmSave();pipeCount();$('#rdSave').textContent=`Added ${rows.length} line${rows.length>1?'s':''} ✓`;$('#rdSave').disabled=true;
+        $('#rdSave').insertAdjacentHTML('afterend',' <button class="btn" id="rdOpen2">Open it</button>');$('#rdOpen2').onclick=()=>{closeReader();openDrawer(last)}}}}
+    $('#rdCopy').onclick=()=>{navigator.clipboard.writeText(RfqReader.toText(res)).then(()=>$('#rdCopy').textContent='Copied ✓',()=>alert('Copy failed'))};
+    $('#rdPrint').onclick=()=>printReq(res);
+  }catch(e){out.innerHTML=`<div class="small">Couldn't read that PDF: ${esc(e.message||String(e))}</div>`}
+}
+
 function closeModal(){$('#modalBg').classList.add('hidden')}
 $('#modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};
 function supForm(s,after){
@@ -856,7 +1019,7 @@ function cfgForm(){
   $('#tReset').onclick=()=>{$('#tS1').value=DEF_TPL.subject1;$('#tSN').value=DEF_TPL.subjectN;$('#tBody').value=DEF_TPL.body};
   $('#cExp').onclick=()=>{const b=new Blob([JSON.stringify(CRM,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-crm-${today}.json`;a.click()};
 }
-$('#cfgBtn').onclick=cfgForm;$('#syncBadge').onclick=cfgForm;
+$('#rdBtn').onclick=()=>readerModal(null);$('#cfgBtn').onclick=cfgForm;$('#syncBadge').onclick=cfgForm;
 function subtab(which){for(const[t,pn]of[['stPipe','pipePane'],['stSup','supPane'],['stOrd','ordPane']]){$('#'+pn).classList.toggle('hidden',t!==which);$('#'+t).classList.toggle('on',t===which)}if(which==='stPipe')renderPipe();if(which==='stSup')renderSup();if(which==='stOrd')renderOrd()}
 $('#stOrd').onclick=()=>subtab('stOrd');
 $('#stPipe').onclick=()=>subtab('stPipe');
