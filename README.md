@@ -80,3 +80,12 @@ Opening an RFQ marks it as viewed. In the list, opened RFQs are grayed out and n
 - **NSN / part number list:** paste any number of NSNs or part numbers. The list shows open RFQs for those NSNs, or RFQs where one of the numbers is an approved part.
 - **Set-aside:** tick several at once.
 - **Posted within:** today, 2 days, or 7 days.
+
+## Pipeline workflow
+
+- **Add several RFQs at once:** tick them in Discover (the header box selects the whole page) and click **Add selected to pipeline**. Their approved-source CAGEs become suppliers automatically. Fill in names and emails under **Manage → Suppliers → Missing email**.
+- **Statuses:** Watching → Sourcing → Quote requests sent (set automatically when you open an RFQ email draft) → Ready to bid → Bid → Won / Lost / Pass.
+- **Pipeline filters:** search, status, close date, and quote state (none, waiting, priced). Save any combination as a pipeline view tab.
+- **Related open RFQs:** the drawer lists other open solicitations for the same NSN.
+- **Supplier "Include in RFQ emails":** set it to No to leave a supplier out of all RFQ drafts.
+- **Email template:** edit the subject and body in ⚙ Settings → RFQ email template, using placeholders like `{items}`, `{contact}` and `{signature}`.

@@ -134,10 +134,10 @@ td.nom{white-space:normal;min-width:160px}
   <section class="card">
     <div id="sampleBanner" class="banner hidden">Showing sample data (Oct 21 DIBBS day). Live data appears after the first daily update runs. Approved sources are only filled in on the few sample rows that match the Oct 25 batch file.</div>
     <div class="vtabs" id="vtabs"></div>
-    <div class="bar"><strong id="count"></strong><span><button class="btn" id="csv">Export CSV</button></span></div>
+    <div class="bar"><strong id="count"></strong><span><button class="btn p" id="addSel">Add selected to pipeline</button> <button class="btn" id="csv">Export CSV</button></span></div>
     <div class="tw"><table>
       <thead><tr>
-        <th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC</th><th data-k="15">Sources</th><th data-k="16">Last $/ea</th><th data-k="12">FOB</th><th data-k="16" title="Inspection &amp; acceptance point">Insp./Accept.</th><th data-k="11">Type</th><th>Status</th>
+        <th><input type="checkbox" id="dSelAll" style="width:auto" title="Select this page"></th><th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC</th><th data-k="15">Sources</th><th data-k="16">Last $/ea</th><th data-k="12">FOB</th><th data-k="16" title="Inspection &amp; acceptance point">Insp./Accept.</th><th data-k="11">Type</th><th>Status</th>
       </tr></thead>
       <tbody id="tb"></tbody>
     </table></div>
@@ -149,6 +149,8 @@ td.nom{white-space:normal;min-width:160px}
   <section class="card">
     <div class="subtabs"><button class="btn on" id="stPipe">Bid pipeline</button><button class="btn" id="stSup">Suppliers</button><button class="btn" id="stOrd">Orders <span id="ordBadge"></span></button></div>
     <div id="pipePane">
+    <div class="vtabs" id="pvtabs"></div>
+    <div class="row2" style="grid-template-columns:2fr 1fr 1fr 1fr;margin-bottom:8px"><input id="pQ" placeholder="Search solicitation, NSN, item, supplier…"><select id="pSt"><option value="">All statuses</option></select><select id="pCl"><option value="">Any close date</option><option value="0">Closing today</option><option value="3">Within 3 days</option><option value="7">Within 7 days</option><option value="open">Still open</option></select><select id="pQt"><option value="">Any quotes</option><option value="none">No quotes yet</option><option value="waiting">Requested, waiting</option><option value="got">Has a priced quote</option></select></div>
     <div class="bar"><strong>Bid pipeline</strong><span><button class="btn p" id="bulkMail">Draft RFQ emails for selected</button> <button class="btn p" id="bqExport">Export DIBBS batch file</button> <button class="btn" id="pipeCsv">Export CSV</button></span></div>
     <div class="tw"><table>
       <thead><tr><th><input type="checkbox" id="selAll" style="width:auto"></th><th>Status</th><th>Return by</th><th>Solicitation</th><th>NSN</th><th>Item</th><th>Qty</th><th>Quotes</th><th>Vendor</th><th>Vendor $/ea</th><th>My bid $/ea</th><th>Margin</th></tr></thead>
@@ -166,7 +168,7 @@ td.nom{white-space:normal;min-width:160px}
     </div>
     <div id="supPane" class="hidden">
     <div class="bar"><strong>Suppliers</strong><span><button class="btn p" id="supAdd">+ Add supplier</button> <button class="btn" id="supCsv">Export CSV</button></span></div>
-    <input id="supQ" placeholder="Search suppliers, CAGE, email…" style="margin-bottom:8px">
+    <div class="row2" style="grid-template-columns:2fr 1fr;margin-bottom:8px"><input id="supQ" placeholder="Search suppliers, CAGE, email…"><select id="supV"><option value="">All suppliers</option><option value="noemail">Missing email</option><option value="noname">Missing name (auto-added)</option><option value="noquote">Not quoting</option></select></div>
     <div class="tw"><table>
       <thead><tr><th>Name</th><th>CAGE</th><th>Contact</th><th>Email</th><th>Phone</th><th>Open RFQs</th><th>Quotes</th><th>Notes</th></tr></thead>
       <tbody id="sb"></tbody>
@@ -194,7 +196,7 @@ const FSG={10:'Weapons',11:'Nuclear ordnance',12:'Fire control',13:'Ammunition &
 const SA={N:'Unrestricted',Y:'Small Bus.',L:'WOSB',E:'EDWOSB',H:'HUBZone',R:'SDVOSB',A:'8(a)'};
 const TYPE={F:'Fast award',P:'Auto-eval',I:'AIDC',M:'Manual','':''};
 const AMSC={G:'Full data, open competition',Z:'Commercial item',A:'Data not available',B:'Source-controlled',C:'Engineering source approval required',D:'Data not available',H:'Data not available, qualification',K:'No data rights',L:'Data incomplete',P:'Data in process',Q:'Qualified products list',R:'Data rights not owned',T:'Data inadequate',V:'Data available, not competitive'};
-const STAT=['Watching','Sourcing','Bid','Won','Lost','Pass'];
+const STAT=['Watching','Sourcing','Quote requests sent','Ready to bid','Bid','Won','Lost','Pass'];
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
@@ -304,7 +306,7 @@ let curView='';
 function captureView(){const v={};for(const id of VIEW_IDS)v[id]=$('#'+id).value;v.hideSeen=$('#hideSeen').checked;v.sa=[...document.querySelectorAll('#saBox input:checked')].map(i=>i.value);v.fsc=[...fscSel];v.sortK=sortK;v.sortDir=sortDir;return v}
 function applyView(v){for(const id of VIEW_IDS)$('#'+id).value=v[id]??(id==='minleft'?'0':'');$('#hideSeen').checked=!!v.hideSeen;document.querySelectorAll('#saBox input').forEach(i=>i.checked=(v.sa||[]).includes(i.value));fscSel=new Set(v.fsc||[]);sortK=v.sortK??8;sortDir=v.sortDir??1;page=0;chips();run()}
 function renderViews(){
-  const vs=Object.entries(CRM.views||{}).sort((a,b)=>(a[1].order||0)-(b[1].order||0));
+  const vs=Object.entries(CRM.views||{}).filter(([,v])=>v.kind!=='pipe').sort((a,b)=>(a[1].order||0)-(b[1].order||0));
   $('#vtabs').innerHTML=`<span class="vtab ${curView===''?'on':''}" data-v="">All RFQs</span>`+vs.map(([id,v])=>`<span class="vtab ${curView===id?'on':''}" data-v="${esc(id)}">${esc(v.name)} <b data-del="${esc(id)}" title="Delete view">×</b></span>`).join('')+`<span class="vtab" id="vSave" title="Save the current filters as a tab">+ Save view</span>${curView?'<span class="vtab" id="vUpd" title="Overwrite this tab with the current filters">Update view</span>':''}`;
 }
 $('#vtabs').onclick=e=>{
@@ -384,10 +386,10 @@ function badge(r){const p=pipe[key(r)];return p?`<span class="tag t-acc">${p.sta
 function renderTable(){
   const rows=filtered.slice(page*PER,(page+1)*PER);
   $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]),sn=seen(r);return `<tr data-i="${page*PER+i}" class="${sn?'seen':'new'}" title="${sn?'Opened '+esc(new Date(CRM.viewed[vkey(r)].saved).toLocaleDateString()):'Not opened yet'}">
-    <td>${sn?'':'<span class="dot"></span>'}${r[8]||''} <span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span></td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
+    <td><input type="checkbox" class="dsel" data-i="${page*PER+i}" ${DSEL.has(key(r))?'checked':''} style="width:auto"></td><td>${sn?'':'<span class="dot"></span>'}${r[8]||''} <span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span></td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
     <td class="nom">${esc(r[4])}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
     <td>${SA[r[9]]||r[9]}</td><td>${r[10]?`<span class="tag ${openAmsc(r[10])?'t-ok':'t-warn'}" title="${esc(AMSC[r[10]]||'')}">${r[10]}</span>`:''}</td>
-    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=sumOf(r);if(!m)return '';return `${m[0]>0?'$'+m[0].toFixed(2):''}${m[4]?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="14" class="small">No RFQs match.</td></tr>`;
+    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=sumOf(r);if(!m)return '';return `${m[0]>0?'$'+m[0].toFixed(2):''}${m[4]?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="15" class="small">No RFQs match.</td></tr>`;
   const pages=Math.max(1,Math.ceil(filtered.length/PER));$('#pg').textContent=`Page ${page+1} of ${pages}`;
 }
 function renderFscList(){
@@ -400,7 +402,19 @@ $('#reset').onclick=()=>{document.querySelectorAll('#saBox input').forEach(i=>i.
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=+th.dataset.k;sortDir=sortK===k?-sortDir:1;sortK=k;run()});
 $('#prev').onclick=()=>{if(page>0){page--;renderTable()}};
 $('#next').onclick=()=>{if((page+1)*PER<filtered.length){page++;renderTable()}};
-$('#tb').onclick=e=>{const tr=e.target.closest('tr[data-i]');if(tr)openDrawer(filtered[+tr.dataset.i])};
+const DSEL=new Set();
+$('#tb').onclick=e=>{if(e.target.classList.contains('dsel')){const r=filtered[+e.target.dataset.i],k=key(r);e.target.checked?DSEL.add(k):DSEL.delete(k);addSelLabel();return}const tr=e.target.closest('tr[data-i]');if(tr)openDrawer(filtered[+tr.dataset.i])};
+$('#dSelAll').onclick=e=>{for(const r of filtered.slice(page*PER,(page+1)*PER)){e.target.checked?DSEL.add(key(r)):DSEL.delete(key(r))}renderTable();addSelLabel()};
+function addSelLabel(){$('#addSel').textContent=DSEL.size?`Add ${DSEL.size} to pipeline`:'Add selected to pipeline'}
+// Add an RFQ to the pipeline; its approved-source CAGEs become suppliers automatically.
+function autoSuppliers(r){let n=0;for(const[c]of(r[15]||[])){if(!c||supByCage(c))continue;CRM.suppliers[c]={id:c,cage:c,name:'',auto:true,quoting:'Yes',saved:nowIso()};n++}return n}
+function addToPipe(r,status='Watching'){const k=key(r);if(!pipe[k])pipe[k]={status,row:r,saved:nowIso()};return autoSuppliers(r)}
+$('#addSel').onclick=()=>{
+  const byKey=new Map(D.rows.map(r=>[key(r),r]));let added=0,sup=0;
+  for(const k of DSEL){const r=byKey.get(k);if(!r)continue;if(!pipe[k])added++;sup+=addToPipe(r)}
+  DSEL.clear();crmSave();pipeCount();renderTable();addSelLabel();
+  modal(`<div class="bar"><strong>Added to pipeline</strong><button class="btn" id="mX">✕</button></div><p>${added} RFQ${added===1?'':'s'} added as <b>Watching</b>.${sup?` ${sup} approved-source supplier${sup===1?'':'s'} created. Add their names and emails in <b>Manage → Suppliers → Missing email</b>.`:''}</p>`);$('#mX').onclick=closeModal;
+};
 
 function csv(rows,head){const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;const b=new Blob([[head,...rows].map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-${today}.csv`;a.click()}
 $('#csv').onclick=()=>csv(filtered.map(r=>[r[8],r[0],fmtNsn(r[1]),r[4],r[3],FSC[r[3]]||'',r[5],r[6],SA[r[9]]||r[9],r[10],TYPE[r[11]]||r[11],r[13],r[2],(r[15]||[]).map(a=>a[0]+' '+a[1]).join('; '),r[12]==='O'?'Origin':r[12]==='D'?'Destination':'',r[16]==='O'?'Origin':r[16]==='D'?'Destination':'',pdf(r)]),['Return by','Solicitation','NSN','Item','FSC','FSC name','Qty','Unit','Set-aside','AMSC','Type','Delivery days','PR','Approved sources (CAGE PN)','FOB','Inspection/Acceptance','RFQ PDF']);
@@ -467,6 +481,8 @@ function openDrawer(r){
   </div>
   <label>Notes</label><textarea id="pn" rows="3">${esc(p.notes||'')}</textarea>
   <div style="margin-top:8px"><button class="btn p" id="psave">Save</button></div>
+  ${(()=>{const rel=D.rows.filter(x=>x[1]===r[1]&&key(x)!==key(r));return rel.length?`<h3 style="font-size:15px;margin:18px 0 4px">Related open RFQs: same NSN (${rel.length})</h3>
+  <table class="aw"><tbody>${rel.slice(0,15).map(x=>`<tr class="relGo" data-k="${esc(key(x))}" style="cursor:pointer"><td>${esc(x[0])}</td><td>Qty ${x[5]??''} ${esc(x[6]||'')}</td><td>closes ${esc(x[8]||'')}</td><td>${pipe[key(x)]?`<span class="tag t-acc">${esc(pipe[key(x)].status)}</span>`:''}</td></tr>`).join('')}</tbody></table>`:''})()}
   <h3 style="font-size:15px;margin:18px 0 4px">Award history — this NSN</h3>
   <div class="small">Collected daily from DIBBS awards and kept permanently. Cancelled ($0) and modified awards are flagged.</div>
   <div id="nsnAw" class="small" style="margin-top:8px">Loading…</div>
@@ -502,10 +518,11 @@ function openDrawer(r){
   DR_PTW=null;mcalc();
   const save=status=>{
     const cur={...(pipe[k]||{}),status:status??((pipe[k]||{}).status||'Watching'),vendor:$('#pv').value,...form(),notes:$('#pn').value,row:r,saved:new Date().toISOString()};
-    if(status==='')delPipe(k);else{pipe[k]=cur;crmSave()} pipeCount(); renderTable(); openDrawer(r);
+    if(status==='')delPipe(k);else{pipe[k]=cur;autoSuppliers(r);crmSave()} pipeCount(); renderTable(); openDrawer(r);
   };
   dr.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>save(b.dataset.s));
   $('#psave').onclick=()=>save();
+  dr.querySelectorAll('.relGo').forEach(t=>t.onclick=()=>{const x=D.rows.find(y=>key(y)===t.dataset.k);if(x)openDrawer(x)});
   renderQuotes(r);
   awards(r[3]);
   nsnAwards(r);
@@ -550,8 +567,31 @@ async function awards(fsc){
 // ---------- pipeline ----------
 function pipeCount(){const n=Object.keys(pipe).length;$('#pipeCount').textContent=n?`(${n})`:''}
 const SEL=new Set();
+$('#pSt').innerHTML='<option value="">All statuses</option>'+STAT.map(x=>`<option>${x}</option>`).join('');
+['#pQ','#pSt','#pCl','#pQt'].forEach(x=>$(x).addEventListener('input',renderPipe));
+function pipeFilt(p){
+  const q=$('#pQ').value.trim().toLowerCase().replace(/-/g,''),st=$('#pSt').value,cl=$('#pCl').value,qt=$('#pQt').value,r=p.row,dl=daysLeft(r[8]);
+  if(st&&p.status!==st)return false;
+  if(cl==='open'&&dl<0)return false;if(cl!==''&&cl!=='open'&&(dl<0||dl>+cl))return false;
+  const qs=Object.values(p.quotes||{});
+  if(qt==='none'&&qs.length)return false;if(qt==='waiting'&&!qs.some(x=>x.requested&&x.price==null))return false;if(qt==='got'&&!qs.some(x=>x.price!=null))return false;
+  if(q&&!`${r[0]} ${r[1]} ${r[4]} ${p.vendor||''} ${p.notes||''}`.toLowerCase().replace(/-/g,'').includes(q))return false;
+  return true;
+}
+let curPView='';
+function renderPViews(){
+  const vs=Object.entries(CRM.views||{}).filter(([,v])=>v.kind==='pipe').sort((a,b)=>(a[1].order||0)-(b[1].order||0));
+  $('#pvtabs').innerHTML=`<span class="vtab ${curPView===''?'on':''}" data-v="">All</span>`+vs.map(([id,v])=>`<span class="vtab ${curPView===id?'on':''}" data-v="${esc(id)}">${esc(v.name)} <b data-del="${esc(id)}">×</b></span>`).join('')+'<span class="vtab" id="pvSave">+ Save view</span>';
+}
+$('#pvtabs').onclick=e=>{
+  const d=e.target.closest('[data-del]');if(d){if(confirm('Delete this view?')){delete CRM.views[d.dataset.del];CRM.deleted['w:'+d.dataset.del]=nowIso();crmSave();curPView='';renderPViews()}return}
+  if(e.target.closest('#pvSave')){const name=prompt('Name this pipeline view (e.g. "Waiting on quotes")');if(!name)return;const id='w'+Date.now().toString(36);CRM.views[id]={kind:'pipe',name:name.trim(),f:{q:$('#pQ').value,st:$('#pSt').value,cl:$('#pCl').value,qt:$('#pQt').value},order:Date.now(),saved:nowIso()};crmSave();curPView=id;renderPViews();return}
+  const t=e.target.closest('[data-v]');if(!t)return;curPView=t.dataset.v;const f=curPView?CRM.views[curPView].f:{};
+  $('#pQ').value=f.q||'';$('#pSt').value=f.st||'';$('#pCl').value=f.cl||'';$('#pQt').value=f.qt||'';renderPViews();renderPipe();
+};
 function renderPipe(){
-  const items=Object.values(pipe).sort((a,b)=>(a.row[8]||'').localeCompare(b.row[8]||''));
+  renderPViews();
+  const items=Object.values(pipe).filter(pipeFilt).sort((a,b)=>(a.row[8]||'').localeCompare(b.row[8]||''));
   $('#pb').innerHTML=items.map(p=>{const r=p.row,k=key(r),q=r[5]||1,bm=bidMath(p,q),m=p.cost!=null&&p.bid?bm.margin.toFixed(1)+'%':'';
     const qs=Object.values(p.quotes||{}),got=qs.filter(x=>x.price!=null).length;
     return `<tr data-k="${k}"><td><input type="checkbox" class="sel" data-k="${k}" ${SEL.has(k)?'checked':''} style="width:auto"></td><td><span class="tag t-acc">${p.status}</span></td><td>${r[8]} <span class="small">${daysLeft(r[8])}d</span></td><td>${r[0]}</td><td>${fmtNsn(r[1])}</td><td class="nom">${esc(r[4])}</td><td>${r[5]??''}</td><td>${qs.length?`${got}/${qs.length}`:''}</td><td>${esc(p.vendor||'')}</td><td>${p.cost??''}</td><td>${p.bid??''}</td><td>${m}</td></tr>`}).join('')||'<tr><td colspan="12" class="small">Nothing tracked yet. Open an RFQ and set a status.</td></tr>';
@@ -567,11 +607,12 @@ const supByCage=c=>Object.values(CRM.suppliers).find(s=>s.cage&&s.cage.toUpperCa
 function quoteCount(id){let n=0;for(const p of Object.values(pipe))if(p.quotes&&p.quotes[id]&&p.quotes[id].price!=null)n++;return n}
 function renderSup(){
   const q=($('#supQ').value||'').toLowerCase(),co=cageOpen();
-  const list=sups().filter(s=>!q||[s.name,s.cage,s.email,s.contact,s.notes].join(' ').toLowerCase().includes(q));
-  $('#sb').innerHTML=list.map(s=>`<tr data-id="${esc(s.id)}"><td>${esc(s.name||'')}</td><td>${s.cage?`<a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(s.cage)}&page=1">${esc(s.cage)}</a>`:''}</td><td>${esc(s.contact||'')}</td><td>${esc(s.email||'')}</td><td>${esc(s.phone||'')}</td>
+  const sv=$('#supV').value;
+  const list=sups().filter(s=>(!q||[s.name,s.cage,s.email,s.contact,s.notes].join(' ').toLowerCase().includes(q))&&(sv!=='noemail'||!s.email)&&(sv!=='noname'||!s.name)&&(sv!=='noquote'||s.quoting==='No'));
+  $('#sb').innerHTML=list.map(s=>`<tr data-id="${esc(s.id)}"><td>${esc(s.name||'')}${!s.name?'<span class="small">(add name)</span>':''}${s.quoting==='No'?' <span class="tag t-warn">not quoting</span>':''}</td><td>${s.cage?`<a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(s.cage)}&page=1">${esc(s.cage)}</a>`:''}</td><td>${esc(s.contact||'')}</td><td>${esc(s.email||'')}</td><td>${esc(s.phone||'')}</td>
     <td>${s.cage&&co[s.cage]?`<a href="#" class="cageGo" data-c="${esc(s.cage)}">${co[s.cage]}</a>`:''}</td><td>${quoteCount(s.id)||''}</td><td class="nom">${esc((s.notes||'').slice(0,60))}</td></tr>`).join('')||'<tr><td colspan="8" class="small">No suppliers yet. Add one here, or from an RFQ\'s approved sources.</td></tr>';
 }
-$('#supQ').oninput=renderSup;
+$('#supQ').oninput=renderSup;$('#supV').onchange=renderSup;
 $('#sb').onclick=e=>{const g=e.target.closest('.cageGo');if(g){e.preventDefault();$('#tabFind').click();$('#cage').value=g.dataset.c;page=0;run();return}if(e.target.closest('a'))return;const tr=e.target.closest('tr[data-id]');if(tr)supForm(CRM.suppliers[tr.dataset.id])};
 $('#supAdd').onclick=()=>supForm({});
 $('#supCsv').onclick=()=>csv(sups().map(s=>[s.name,s.cage,s.contact,s.email,s.phone,s.website,s.notes]),['Name','CAGE','Contact','Email','Phone','Website','Notes']);
@@ -583,6 +624,7 @@ function supForm(s,after){
   modal(`<div class="bar"><strong>${s.id?'Edit supplier':'New supplier'}</strong><button class="btn" id="mX">✕</button></div>
   ${f('sName','Company name',s.name)}<div class="row2">${f('sCage','CAGE',s.cage)}${f('sContact','Contact name',s.contact)}</div>
   <div class="row2">${f('sEmail','Email (for RFQs)',s.email,'email')}${f('sPhone','Phone',s.phone)}</div>${f('sWeb','Website',s.website)}
+  <label>Include in RFQ emails?</label><select id="sQuoting"><option value="Yes" ${s.quoting!=='No'?'selected':''}>Yes</option><option value="No" ${s.quoting==='No'?'selected':''}>No, never send them RFQs</option></select>
   <label>Notes</label><textarea id="sNotes" rows="3">${esc(s.notes||'')}</textarea>
   ${s.cage?`<div class="small" style="margin-top:6px"><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(s.cage)}&page=1">Look up ${esc(s.cage)} on DLA CAGE</a> for the company name and address.</div>`:''}
   <div style="display:flex;justify-content:space-between;margin-top:10px"><button class="btn p" id="sSave">Save</button>${s.id?'<button class="btn" id="sDel">Delete</button>':''}</div>`);
@@ -590,7 +632,7 @@ function supForm(s,after){
   $('#sSave').onclick=()=>{
     const cage=$('#sCage').value.trim().toUpperCase(),dup=cage&&supByCage(cage);
     const id=s.id||(dup&&dup.id)||(cage||('s'+Date.now().toString(36)));
-    CRM.suppliers[id]={...(CRM.suppliers[id]||{}),id,name:$('#sName').value.trim(),cage,contact:$('#sContact').value.trim(),email:$('#sEmail').value.trim(),phone:$('#sPhone').value.trim(),website:$('#sWeb').value.trim(),notes:$('#sNotes').value,saved:nowIso()};
+    CRM.suppliers[id]={...(CRM.suppliers[id]||{}),id,name:$('#sName').value.trim(),cage,contact:$('#sContact').value.trim(),email:$('#sEmail').value.trim(),phone:$('#sPhone').value.trim(),website:$('#sWeb').value.trim(),quoting:$('#sQuoting').value,auto:false,notes:$('#sNotes').value,saved:nowIso()};
     crmSave();closeModal();renderSup();after&&after(id);
   };
   if(s.id)$('#sDel').onclick=()=>{if(!confirmDel())return;delete CRM.suppliers[s.id];CRM.deleted['s:'+s.id]=nowIso();crmSave();closeModal();renderSup()};
@@ -598,19 +640,23 @@ function supForm(s,after){
 function confirmDel(){return window.confirm?confirm('Delete this supplier?'):true}
 
 // ---------- RFQ emails ----------
+const DEF_TPL={subject1:'RFQ: {item} | NSN {nsn}',subjectN:'RFQ: {count} items | Tier2 Rigging LLC',
+  body:'Hello{contact},\n\nTier2 Rigging LLC (CAGE 175A8) is requesting a quote on the following:\n\n{items}\n\nPlease include:\n- Unit price (and any quantity breaks)\n- Lead time (days ARO)\n- Country of origin\n- Shipping weight and dimensions\n- Quote valid through date\n- Certificate of Conformance / traceability available (Y/N)\n\nThank you,\n{signature}'};
+const tpl=()=>({...DEF_TPL,...(CFG.tpl||{})});
+const fillTpl=(t,v)=>t.replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m);
 function mailBody(sup,rows){
   const lines=rows.map(r=>{const pn=sup.cage&&(r[15]||[]).find(a=>a[0]===sup.cage);
     return `- NSN ${fmtNsn(r[1])}${pn?` / P/N ${pn[1]} (CAGE ${sup.cage})`:''}\n  ${r[4]}\n  Qty: ${r[5]??''} ${r[6]||''}${r[13]?` | Delivery required within ${r[13]} days ARO`:''}\n  Ref: ${r[0]}`}).join('\n\n');
-  return `Hello${sup.contact?' '+sup.contact:''},\n\nTier2 Rigging LLC (CAGE 175A8) is requesting a quote on the following:\n\n${lines}\n\nPlease include:\n- Unit price (and any quantity breaks)\n- Lead time (days ARO)\n- Country of origin\n- Shipping weight and dimensions\n- Quote valid through date\n- Certificate of Conformance / traceability available (Y/N)\n\nThank you,\n${CFG.sig}`;
+  return fillTpl(tpl().body,{contact:sup.contact?' '+sup.contact:'',items:lines,signature:CFG.sig,count:rows.length,company:sup.name||sup.cage||''});
 }
 function mailto(sup,rows){
-  const subj=rows.length===1?`RFQ: ${rows[0][4]} | NSN ${fmtNsn(rows[0][1])}`:`RFQ: ${rows.length} items | Tier2 Rigging LLC`;
+  const T=tpl(),subj=rows.length===1?fillTpl(T.subject1,{item:rows[0][4],nsn:fmtNsn(rows[0][1]),sol:rows[0][0]}):fillTpl(T.subjectN,{count:rows.length});
   return `mailto:${encodeURIComponent(sup.email)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(mailBody(sup,rows))}`;
 }
 function markRequested(rows,sid){
-  for(const r of rows){const k=key(r),p=pipe[k]||{status:'Sourcing',row:r};p.row=r;if(!p.status||p.status==='Watching')p.status='Sourcing';
+  for(const r of rows){const k=key(r),p=pipe[k]||{status:'Quote requests sent',row:r};p.row=r;if(!p.status||['Watching','Sourcing'].includes(p.status))p.status='Quote requests sent';
     p.quotes=p.quotes||{};p.quotes[sid]={...(p.quotes[sid]||{}),requested:today,date:nowIso()};p.saved=nowIso();pipe[k]=p}
-  crmSave();pipeCount();renderTable();
+  crmSave();pipeCount();renderTable();if(!$('#pipeView').classList.contains('hidden'))renderPipe();
 }
 function candSups(r){
   const p=pipe[key(r)]||{},ids=new Set(Object.keys(p.quotes||{}));
@@ -621,7 +667,7 @@ function renderQuotes(r){
   const k=key(r),el=$('#qList');if(!el)return;const p=pipe[k]||{},qs=p.quotes||{};
   const missing=(r[15]||[]).filter(a=>!supByCage(a[0]));
   el.innerHTML=candSups(r).map(s=>{const q=qs[s.id]||{};return `<div class="qrow" data-sid="${esc(s.id)}"><div class="top"><div><b>${esc(s.name||s.cage)}</b> <span class="small">${esc(s.cage||'')} ${esc(s.email||'no email')}</span>${q.requested?` <span class="tag t-ok">requested ${q.requested}</span>`:''}</div>
-    <div>${s.email?`<a class="btn p qMail" href="${mailto(s,[r])}">Draft RFQ email</a>`:`<button class="btn qEdit">Add email</button>`}</div></div>
+    <div>${s.quoting==='No'?'<span class="tag t-warn">not quoting</span> <button class="btn qEdit">Edit</button>':s.email?`<a class="btn p qMail" href="${mailto(s,[r])}">Draft RFQ email</a>`:`<button class="btn qEdit">Add ${s.name?'email':'name &amp; email'}</button>`}</div></div>
     <div class="qgrid"><input class="qP" type="number" step="0.01" placeholder="$/ea" value="${q.price??''}"><input class="qL" type="number" placeholder="Lead days" value="${q.lead??''}"><input class="qO" placeholder="Origin (e.g. USA)" value="${esc(q.origin||'')}"></div>
     <div style="display:flex;gap:6px;margin-top:6px"><input class="qN" placeholder="Quote notes" value="${esc(q.notes||'')}" style="flex:1"><button class="btn qSave">Save quote</button>${q.price!=null?'<button class="btn qUse">Use</button>':''}</div></div>`}).join('')
   +(missing.length?`<div class="small" style="margin-top:8px">Approved sources not in your suppliers yet: ${missing.map(a=>`<a href="#" class="qAddCage" data-c="${esc(a[0])}">+ ${esc(a[0])}</a>`).join(' ')}</div>`:'');
@@ -641,7 +687,7 @@ function renderQuotes(r){
 $('#bulkMail').onclick=()=>{
   const rows=[...SEL].map(k=>pipe[k]&&pipe[k].row).filter(Boolean);
   if(!rows.length){modal('<div class="bar"><strong>Draft RFQ emails</strong><button class="btn" id="mX">✕</button></div><p class="small">Tick the RFQs you want quoted using the boxes on the left, then click this again.</p>');$('#mX').onclick=closeModal;return}
-  const by={};for(const r of rows)for(const s of candSups(r)){(by[s.id]=by[s.id]||{s,rows:[]}).rows.push(r)}
+  const by={};for(const r of rows)for(const s of candSups(r).filter(x=>x.quoting!=='No')){(by[s.id]=by[s.id]||{s,rows:[]}).rows.push(r)}
   const list=Object.values(by);
   modal(`<div class="bar"><strong>Draft RFQ emails (${rows.length} RFQs)</strong><button class="btn" id="mX">✕</button></div>
   <p class="small">One email per supplier, listing every selected RFQ they can quote. Each opens as a draft in Thunderbird. Pick your purchasing@ address in the From box before sending.</p>
@@ -788,11 +834,19 @@ function cfgForm(){
   <div class="row2"><div><label>Your CAGE (cols 6-7)</label><input id="qp_cage" value="${esc(CFG.qp.cage||'')}"></div><div><label>FOB Origin ship-from city</label><input id="qp_fobCity" value="${esc(CFG.qp.fobCity||'')}"></div></div>
   <div class="row2"><div><label>Ship-from state</label><input id="qp_fobState" value="${esc(CFG.qp.fobState||'')}"></div><div><label>Ship-from country</label><input id="qp_fobCountry" value="${esc(CFG.qp.fobCountry||'')}"></div></div>
   </details>
+  <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">RFQ email template</summary>
+  <div class="small" style="margin:6px 0">Placeholders: <code>{contact}</code> (" Bob", or blank), <code>{items}</code> (the NSN / part / qty list), <code>{signature}</code>, <code>{count}</code>, <code>{company}</code>. One-item subject also takes <code>{item}</code>, <code>{nsn}</code>, <code>{sol}</code>.</div>
+  <label>Subject (one item)</label><input id="tS1" value="${esc(tpl().subject1)}">
+  <label>Subject (several items)</label><input id="tSN" value="${esc(tpl().subjectN)}">
+  <label>Body</label><textarea id="tBody" rows="10">${esc(tpl().body)}</textarea>
+  <button class="btn" id="tReset" style="margin-top:6px">Reset to default</button>
+  </details>
   <label>Email signature (used in RFQ drafts)</label><textarea id="cSig" rows="5">${esc(CFG.sig)}</textarea>
   <div style="display:flex;gap:6px;margin-top:10px"><button class="btn p" id="cSave">Save &amp; sync</button><button class="btn" id="cExp">Download backup</button></div>
   <div class="small" id="cMsg" style="margin-top:6px">${esc($('#syncBadge').title||'')}</div>`);
   $('#mX').onclick=closeModal;
-  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;CFG.mtarget=+$('#cMt').value||20;for(const f of['sb','aac','pccr','adr','pkg','haz','mat','mfg','disc','quality','cage','fobCity','fobState','fobCountry']){const el=$('#qp_'+f);if(el)CFG.qp[f]=el.value.trim()}store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
+  $('#cSave').onclick=async()=>{CFG.repo=$('#cRepo').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,'');CFG.token=$('#cTok').value.trim();CFG.sig=$('#cSig').value;CFG.tpl={subject1:$('#tS1').value,subjectN:$('#tSN').value,body:$('#tBody').value};CFG.mtarget=+$('#cMt').value||20;for(const f of['sb','aac','pccr','adr','pkg','haz','mat','mfg','disc','quality','cage','fobCity','fobState','fobCountry']){const el=$('#qp_'+f);if(el)CFG.qp[f]=el.value.trim()}store.set('bp_cfg',CFG);$('#cMsg').textContent='Syncing…';await sync();$('#cMsg').textContent=$('#syncBadge').textContent+($('#syncBadge').title&&$('#syncBadge').classList.contains('err')?': '+$('#syncBadge').title:'')};
+  $('#tReset').onclick=()=>{$('#tS1').value=DEF_TPL.subject1;$('#tSN').value=DEF_TPL.subjectN;$('#tBody').value=DEF_TPL.body};
   $('#cExp').onclick=()=>{const b=new Blob([JSON.stringify(CRM,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-crm-${today}.json`;a.click()};
 }
 $('#cfgBtn').onclick=cfgForm;$('#syncBadge').onclick=cfgForm;
