@@ -206,6 +206,33 @@ function lastAw(r){
   return b;
 }
 const histRead=r=>!!(HS[r[1]]||sumOf(r));
+// Suggested: low-hanging fruit across all FSCs. Points for signs of an easy, resellable buy with
+// little competition history. DIBBS doesn't publish who quoted, so "not bid on" is judged from
+// procurement history (never bought / not bought in years / no repeat winner).
+function sugOf(r){
+  if(pipe[key(r)]||r[17])return null;
+  const dl=daysLeft(r[8]);if(dl!==null&&dl<3)return null;
+  const as=r[15]||[],z=r[10]==='Z';
+  if(!openAmsc(r[10]))return null;            // tech data restricted: skip
+  if(!z&&!as.length)return null;              // need a commercial item or a named part to buy
+  let sc=0;const why=[];
+  if(z){sc+=30;why.push('COTS (AMSC Z)')}else{sc+=12;why.push('Open sourcing')}
+  const la=lastAw(r),age=la?-daysLeft(la.date)/365:null;
+  if(!la&&histRead(r)){sc+=25;why.push('Never procured')}
+  else if(la&&age>=2){sc+=22;why.push(`Last bought ${Math.floor(age)}y ago`)}
+  else if(la&&age>=1){sc+=10;why.push('Last bought 1y+ ago')}
+  if(la&&la.same)sc-=15;else if(la){sc+=6;why.push('No repeat winner')}
+  if(la&&asWonLast(r))sc-=5;
+  if(as.length){sc+=8;why.push(`${as.length} approved P/N`)}
+  if(r[9]==='Y'){sc+=10;why.push('Small bus. set-aside')}
+  if(r[12]==='O'){sc+=4;why.push('FOB origin')}
+  if(r[16]==='D'){sc+=4;why.push('Dest. inspection')}
+  if(r[7]&&-daysLeft(r[7])<=1){sc+=5;why.push('New')}
+  if(!seen(r))sc+=2;
+  return sc>=45?{sc,why}:null;
+}
+const SUG=new Map();
+function sugRefresh(){SUG.clear();for(const r of D.rows){const x=sugOf(r);if(x)SUG.set(key(r),x)}}
 const asWonLast=r=>{const x=lastAw(r);return !!(x&&(r[15]||[]).some(a=>a[0]===x.cage))};
 const FILES='https://dibbs2.bsm.dla.mil', DIBBS='https://www.dibbs.bsm.dla.mil';
 const FSG={10:'Weapons',11:'Nuclear ordnance',12:'Fire control',13:'Ammunition & explosives',14:'Guided missiles',15:'Aircraft & airframe',16:'Aircraft components',17:'Aircraft launch/ground handling',18:'Space vehicles',19:'Ships & small craft',20:'Ship & marine equipment',22:'Railway equipment',23:'Ground vehicles',24:'Tractors',25:'Vehicle components',26:'Tires & tubes',28:'Engines & turbines',29:'Engine accessories',30:'Power transmission',31:'Bearings',32:'Woodworking machinery',34:'Metalworking machinery',35:'Service & trade equipment',36:'Special industry machinery',37:'Agricultural machinery',38:'Construction & mining',39:'Materials handling',40:'Rope, cable, chain & fittings',41:'Refrigeration & A/C',42:'Fire fighting, rescue & safety',43:'Pumps & compressors',44:'Furnace & drying equipment',45:'Plumbing & heating',46:'Water purification',47:'Pipe, hose & fittings',48:'Valves',49:'Shop equipment',51:'Hand tools',52:'Measuring tools',53:'Hardware & abrasives',54:'Prefab structures',55:'Lumber & plywood',56:'Construction materials',58:'Communication & radar',59:'Electrical & electronic components',60:'Fiber optics',61:'Electric wire & power',62:'Lighting',63:'Alarm & security',65:'Medical & dental',66:'Instruments & lab',67:'Photographic',68:'Chemicals',69:'Training aids',70:'IT equipment',71:'Furniture',72:'Furnishings',73:'Food prep & serving',74:'Office machines',75:'Office supplies',76:'Books & maps',77:'Musical & radios',78:'Recreational & athletic',79:'Cleaning supplies',80:'Brushes, paints & adhesives',81:'Containers & packaging',83:'Textiles, leather & tents',84:'Clothing & individual equipment',85:'Toiletries',87:'Agricultural supplies',88:'Live animals',89:'Subsistence',91:'Fuels & lubricants',93:'Nonmetallic fabricated materials',94:'Nonmetallic crude materials',95:'Metal bars & sheets',96:'Ores & minerals',99:'Miscellaneous'};
@@ -323,13 +350,14 @@ function captureView(){const v={};for(const id of VIEW_IDS)v[id]=$('#'+id).value
 function applyView(v){for(const id of VIEW_IDS)$('#'+id).value=v[id]??(id==='minleft'?'0':'');$('#hideSeen').checked=!!v.hideSeen;document.querySelectorAll('#saBox input').forEach(i=>i.checked=(v.sa||[]).includes(i.value));fscSel=new Set(v.fsc||[]);sortK=v.sortK??8;sortDir=v.sortDir??1;page=0;chips();run()}
 function renderViews(){
   const vs=Object.entries(CRM.views||{}).filter(([,v])=>v.kind!=='pipe').sort((a,b)=>(a[1].order||0)-(b[1].order||0));
-  $('#vtabs').innerHTML=`<span class="vtab ${curView===''?'on':''}" data-v="">All RFQs</span>`+vs.map(([id,v])=>`<span class="vtab ${curView===id?'on':''}" data-v="${esc(id)}">${esc(v.name)} <b data-del="${esc(id)}" title="Delete view">×</b></span>`).join('')+`<span class="vtab" id="vSave" title="Save the current filters as a tab">+ Save view</span>${curView?'<span class="vtab" id="vUpd" title="Overwrite this tab with the current filters">Update view</span>':''}`;
+  $('#vtabs').innerHTML=`<span class="vtab ${curView==='sugg'?'on':''}" data-v="sugg" title="Easy-win candidates across all FSCs, refreshed with every daily update: commercial or open-sourcing items with a part to buy, little or old procurement history, ranked best first">★ Suggested${SUG.size?` (${SUG.size.toLocaleString()})`:''}</span><span class="vtab ${curView===''?'on':''}" data-v="">All RFQs</span>`+vs.map(([id,v])=>`<span class="vtab ${curView===id?'on':''}" data-v="${esc(id)}">${esc(v.name)} <b data-del="${esc(id)}" title="Delete view">×</b></span>`).join('')+`<span class="vtab" id="vSave" title="Save the current filters as a tab">+ Save view</span>${curView?'<span class="vtab" id="vUpd" title="Overwrite this tab with the current filters">Update view</span>':''}`;
 }
 $('#vtabs').onclick=e=>{
   const d=e.target.closest('[data-del]');if(d){const id=d.dataset.del;if(confirm('Delete this view?')){delete CRM.views[id];CRM.deleted['w:'+id]=nowIso();crmSave();if(curView===id)curView='';renderViews()}return}
   if(e.target.closest('#vSave')){const name=prompt('Name this view (e.g. "My FSCs · small business · closing 7 days")');if(!name)return;const id='w'+Date.now().toString(36);CRM.views[id]={name:name.trim(),f:captureView(),order:Date.now(),saved:nowIso()};crmSave();curView=id;renderViews();return}
   if(e.target.closest('#vUpd')){const v=CRM.views[curView];if(v){v.f=captureView();v.saved=nowIso();crmSave();renderViews()}return}
   const t=e.target.closest('[data-v]');if(!t)return;curView=t.dataset.v;
+  if(curView==='sugg'){$('#reset').click();curView='sugg';sugRefresh();renderViews();run();return}
   if(curView==='')$('#reset').click();else applyView(CRM.views[curView].f);renderViews();
 };
 // ---------- Find FSCs: match a plain-English description against FSC names and open RFQ item names ----------
@@ -410,7 +438,8 @@ function loadPastDue(){if(PD_STATE)return;PD_STATE=1;const s=document.createElem
 function run(){
   if($('#pdF').value&&!PD_STATE)loadPastDue();
   filtered=filt(false);
-  filtered.sort((a,b)=>{let x=a[sortK],y=b[sortK];if(sortK===15){x=(x||[]).length;y=(y||[]).length}if(sortK===16){x=(lastAw(a)||{}).unit||0;y=(lastAw(b)||{}).unit||0}return (typeof x==='number'||typeof y==='number'?(x||0)-(y||0):String(x||'').localeCompare(String(y||'')))*sortDir});
+  if(curView==='sugg'){filtered=filtered.filter(r=>SUG.has(key(r)));filtered.sort((a,b)=>SUG.get(key(b)).sc-SUG.get(key(a)).sc||(a[8]||'').localeCompare(b[8]||''))}
+  else filtered.sort((a,b)=>{let x=a[sortK],y=b[sortK];if(sortK===15){x=(x||[]).length;y=(y||[]).length}if(sortK===16){x=(lastAw(a)||{}).unit||0;y=(lastAw(b)||{}).unit||0}return (typeof x==='number'||typeof y==='number'?(x||0)-(y||0):String(x||'').localeCompare(String(y||'')))*sortDir});
   page=Math.min(page,Math.max(0,Math.ceil(filtered.length/PER)-1));
   $('#count').textContent=`${filtered.length.toLocaleString()} RFQ lines`;
   renderTable(); renderFscList();
@@ -420,7 +449,7 @@ function renderTable(){
   const rows=filtered.slice(page*PER,(page+1)*PER);
   $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]),sn=seen(r);return `<tr data-i="${page*PER+i}" class="${sn?'seen':'new'}" title="${sn?'Opened '+esc(new Date(CRM.viewed[vkey(r)].saved).toLocaleDateString()):'Not opened yet'}">
     <td><input type="checkbox" class="dsel" data-i="${page*PER+i}" ${DSEL.has(key(r))?'checked':''} style="width:auto"></td><td>${sn?'':'<span class="dot"></span>'}${r[8]||''} ${r[17]?`<span class="tag t-warn" title="Return-by date passed, but DIBBS showed it Open on ${r[17]}. DLA may still take quotes.">past due · open</span>`:`<span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span>`}</td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
-    <td class="nom">${esc(r[4])}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
+    <td class="nom">${esc(r[4])}${curView==='sugg'&&SUG.has(key(r))?`<br><span class="small" title="Suggestion score ${SUG.get(key(r)).sc}">${SUG.get(key(r)).why.map(esc).join(' · ')}</span>`:''}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
     <td>${SA[r[9]]||r[9]}</td><td>${r[10]?`<span class="tag ${openAmsc(r[10])?'t-ok':'t-warn'}" title="${esc(AMSC[r[10]]||'')}">${r[10]}</span>`:''}</td>
     <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=lastAw(r);if(!m)return histRead(r)?'<span class="small">never</span>':'';const yrs=-daysLeft(m.date)/365;return `${m.unit>0?'$'+(+m.unit).toFixed(2):''}<br><span class="small ${yrs>=2?'':''}" title="Last procured ${esc(m.date)} by CAGE ${esc(m.cage)}">${esc(m.date.slice(0,7))}${yrs>=2?' · '+Math.floor(yrs)+'y':''}</span>${m.same?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="15" class="small">${noMatchMsg()}</td></tr>`;
   const pages=Math.max(1,Math.ceil(filtered.length/PER));$('#pg').textContent=`Page ${page+1} of ${pages}`;
@@ -1030,7 +1059,7 @@ $('#pipeCsv').onclick=()=>csv(Object.values(pipe).map(p=>{const r=p.row;const qs
 $('#tabFind').onclick=()=>{$('#findView').classList.remove('hidden');$('#pipeView').classList.add('hidden');$('#tabFind').classList.add('on');$('#tabPipe').classList.remove('on')};
 $('#tabPipe').onclick=()=>{$('#pipeView').classList.remove('hidden');$('#findView').classList.add('hidden');$('#tabPipe').classList.add('on');$('#tabFind').classList.remove('on');renderPipe();renderSup();renderOrd()};
 
-pruneSeen(); renderViews(); chips(); pipeCount(); run(); syncBadge('Local only'); ordBadge(); (CFG.repo&&CFG.token?sync():Promise.resolve()).then(autoOutcomes);
+pruneSeen(); sugRefresh(); renderViews(); chips(); pipeCount(); run(); syncBadge('Local only'); ordBadge(); (CFG.repo&&CFG.token?sync():Promise.resolve()).then(autoOutcomes);
 </script>
 </body>
 </html>
