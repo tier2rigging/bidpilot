@@ -56,11 +56,13 @@ const nsnFromText = (t) => {
   return '';
 };
 
+const DBG = {};
 async function statusFor(nsn) {
   const u = `${DIBBS}/RFQ/RFQNsn.aspx?value=${nsn}&category=issue&Scope=all`;
   let page = await get(u);
   let m = parseNsnSearch(page);
   if (!m.size) { page = await get(u.replace('Scope=all', 'Scope=')); m = parseNsnSearch(page); }
+  DBG.status = { n: m.size, sample: [...m].slice(0, 8), text: page.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 1500) };
   return m; // sol -> status
 }
 
@@ -70,7 +72,7 @@ async function awardsFor(nsn) {
     `${DIBBS}/Awards/AwdRecs.aspx?Category=nsn&TypeSrch=cq&Value=${nsn.slice(0, 4)}-${nsn.slice(4, 6)}-${nsn.slice(6, 9)}-${nsn.slice(9)}`,
   ];
   for (const u of tries) {
-    try { const r = parseAwardPage(await get(u)).rows.filter((x) => !x.nsn || x.nsn === nsn); if (r.length) return r.slice(0, 25); } catch {}
+    try { const html = await get(u); const p = parseAwardPage(html); (DBG.awards = DBG.awards || []).push({ u, rows: p.rows.length, total: p.total, text: html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 800) }); const r = p.rows.filter((x) => !x.nsn || x.nsn === nsn); if (r.length) return r.slice(0, 25); } catch (e) { (DBG.awards = DBG.awards || []).push({ u, err: e.message }); }
   }
   return [];
 }
@@ -118,6 +120,7 @@ async function main() {
     try { out.awards = await awardsFor(out.nsn); } catch (e) { err('awards', e); }
   } else if (out.kind === 'sol') out.errors.push('could not find the NSN (RFQ PDF not available)');
 
+  if (process.env.LK_DEBUG) out.debug = DBG;
   fs.mkdirSync(DIR, { recursive: true });
   fs.writeFileSync(path.join(DIR, `${q}.json`), JSON.stringify(out));
   const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.json')).map((f) => [f, fs.statSync(path.join(DIR, f)).mtimeMs]).sort((a, b) => b[1] - a[1]);
