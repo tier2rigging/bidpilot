@@ -71,3 +71,10 @@ Not exported (quote these on DIBBS directly): foreign-origin items, hazmat items
 ## Opened RFQs
 
 Opening an RFQ marks it as viewed. In the list, opened RFQs are grayed out and new ones have a blue dot. Tick **Hide RFQs I've opened** to see only new ones. **Mark as not opened** in the drawer resets it. Viewed marks sync with the CRM, and marks for closed RFQs are cleared automatically.
+
+## Search extras
+
+- **Saved views:** set your filters, then click **+ Save view** above the table. Each view becomes a tab, and clicking it restores every filter, the FSC list, and the sort. **Update view** overwrites the open tab, and **×** deletes it. Views sync with the CRM.
+- **NSN / part number list:** paste any number of NSNs or part numbers. The list shows open RFQs for those NSNs, or RFQs where one of the numbers is an approved part.
+- **Set-aside:** tick several at once.
+- **Posted within:** today, 2 days, or 7 days.

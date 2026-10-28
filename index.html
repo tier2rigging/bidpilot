@@ -33,6 +33,8 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;
 th{font-size:11px;text-transform:uppercase;color:var(--mute);cursor:pointer;user-select:none;position:sticky;top:0;background:var(--card)}
 tbody tr{cursor:pointer}tbody tr:hover{background:var(--bg)}
 #tb tr.seen td{color:var(--mute)}#tb tr.seen td:first-child{box-shadow:inset 3px 0 0 transparent}#tb tr.new td:first-child{box-shadow:inset 3px 0 0 #2f6fed}
+.vtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.vtab{border:1px solid var(--line);background:var(--bg);border-radius:16px;padding:4px 10px;font-size:13px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}.vtab.on{background:var(--ink);color:var(--card);border-color:var(--ink)}.vtab b{font-weight:400;opacity:.6}.vtab b:hover{opacity:1}
+.sachk{display:flex;flex-wrap:wrap;gap:4px 10px}.sachk label{display:flex;gap:4px;align-items:center;text-transform:none;font-size:12.5px;font-weight:400;color:var(--ink);margin:0}.sachk input{width:auto}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#2f6fed;margin-right:6px;vertical-align:middle}
 td.nom{white-space:normal;min-width:160px}
 .tw{overflow:auto;max-height:calc(100vh - 190px)}
@@ -75,6 +77,9 @@ td.nom{white-space:normal;min-width:160px}
     <div class="card">
       <label>Search</label>
       <input id="q" placeholder="NSN, solicitation, item name…">
+      <label>NSN / part number list</label>
+      <textarea id="nsnList" rows="2" placeholder="Paste NSNs or part numbers, one per line or comma-separated"></textarea>
+      <div class="small" id="nsnListN"></div>
       <label>Add FSC (any of all 666)</label>
       <input id="fscIn" list="fscOpts" placeholder="Type code or name, e.g. 1670 or parachute">
       <datalist id="fscOpts"></datalist>
@@ -86,7 +91,7 @@ td.nom{white-space:normal;min-width:160px}
       <label>Group (FSG)</label>
       <select id="fsg"><option value="">All groups</option></select>
       <label>Set-aside</label>
-      <select id="sa"><option value="">Any</option><option value="N">Unrestricted</option><option value="Y">Small Business</option><option value="L">WOSB</option><option value="E">EDWOSB</option><option value="H">HUBZone</option><option value="R">SDVOSB</option><option value="A">8(a)</option></select>
+      <div class="sachk" id="saBox"></div>
       <label>Tech data / sources (AMSC)</label>
       <select id="amsc"><option value="">Any</option><option value="open">Open competition (G, Z, blank)</option><option value="restricted">Approved-source / restricted</option></select>
       <label>Approved sources</label>
@@ -102,6 +107,8 @@ td.nom{white-space:normal;min-width:160px}
       </div>
       <label>RFQ type</label>
       <select id="type"><option value="">Any</option><option value="F">Fast award</option><option value="P">Auto-evaluation</option><option value="M">Manual</option><option value="I">AIDC</option></select>
+      <div class="row2">
+        <div><label>Posted within</label><select id="posted"><option value="">Any</option><option value="0">Today</option><option value="2">2 days</option><option value="7">7 days</option></select></div></div>
       <div class="row2">
         <div><label>Closes within</label><select id="close"><option value="">Any</option><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option></select></div>
         <div><label>Min days left</label><select id="minleft"><option value="0">0</option><option value="2">2</option><option value="5">5</option><option value="10">10</option></select></div>
@@ -120,6 +127,7 @@ td.nom{white-space:normal;min-width:160px}
   </aside>
   <section class="card">
     <div id="sampleBanner" class="banner hidden">Showing sample data (Oct 21 DIBBS day). Live data appears after the first daily update runs. Approved sources are only filled in on the few sample rows that match the Oct 25 batch file.</div>
+    <div class="vtabs" id="vtabs"></div>
     <div class="bar"><strong id="count"></strong><span><button class="btn" id="csv">Export CSV</button></span></div>
     <div class="tw"><table>
       <thead><tr>
@@ -203,15 +211,15 @@ const openAmsc=a=>!a||a==='G'||a==='Z';
 const CFG=Object.assign({repo:'',token:'',sig:'Tier2 Rigging LLC\nCAGE: 175A8\nManorville, NY\n516-902-8843\ntier2rigging.com',mtarget:20,qp:{cage:'175A8',sb:'',aac:'',pccr:'',adr:'',pkg:'',haz:'',mat:'',disc:'1',mfg:'DD',quality:'',fobCity:'Manorville',fobState:'NY',fobCountry:'US'}},store.get('bp_cfg',{}));
 CFG.qp=Object.assign({cage:'175A8',disc:'1',mfg:'DD',fobCity:'Manorville',fobState:'NY',fobCountry:'US'},CFG.qp||{});
 let CRM=store.get('bp_crm',null)||{pipeline:store.get('t2_pipe',{}),suppliers:{},deleted:{}};
-CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.orders=CRM.orders||{};CRM.viewed=CRM.viewed||{};CRM.deleted=CRM.deleted||{};
+CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.orders=CRM.orders||{};CRM.viewed=CRM.viewed||{};CRM.views=CRM.views||{};CRM.deleted=CRM.deleted||{};
 let pipe=CRM.pipeline;
 const nowIso=()=>new Date().toISOString();
 function canon(o){return JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v)}
 function mergeCRM(a,b){
-  const out={pipeline:{},suppliers:{},orders:{},viewed:{},deleted:{...(a.deleted||{})}};
+  const out={pipeline:{},suppliers:{},orders:{},viewed:{},views:{},deleted:{...(a.deleted||{})}};
   for(const[k,t]of Object.entries(b.deleted||{}))if(!out.deleted[k]||t>out.deleted[k])out.deleted[k]=t;
-  for(const col of['pipeline','suppliers','orders','viewed']){
-    const A=a[col]||{},B=b[col]||{},pre=col==='pipeline'?'p:':col==='orders'?'o:':col==='viewed'?'v:':'s:';
+  for(const col of['pipeline','suppliers','orders','viewed','views']){
+    const A=a[col]||{},B=b[col]||{},pre={pipeline:'p:',orders:'o:',viewed:'v:',views:'w:'}[col]||'s:';
     for(const id of new Set([...Object.keys(A),...Object.keys(B)])){
       const x=A[id],y=B[id];let w=!x?y:!y?x:((y.saved||'')>(x.saved||'')?y:x);
       if(col==='pipeline'&&x&&y&&w){const q={...(x.quotes||{})};for(const[s,v]of Object.entries(y.quotes||{}))if(!q[s]||(v.date||'')>(q[s].date||''))q[s]=v;w={...w,quotes:q}}
@@ -232,13 +240,13 @@ async function sync(){
   syncing=true;syncBadge('Syncing…');
   try{
     for(let i=0;i<3;i++){
-      let remote={pipeline:{},suppliers:{},orders:{},viewed:{},deleted:{}},sha;
+      let remote={pipeline:{},suppliers:{},orders:{},viewed:{},views:{},deleted:{}},sha;
       const g=await gh('GET');
       if(g.status===200){const j=await g.json();sha=j.sha;remote=JSON.parse(b64d(j.content||'')||'{}')}
       else if(g.status!==404)throw new Error(g.status===401?'bad token':g.status===404?'repo not found':'GitHub '+g.status);
       const merged=mergeCRM(remote,CRM);
       CRM=merged;pipe=CRM.pipeline;store.set('bp_crm',CRM);
-      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},orders:remote.orders||{},viewed:remote.viewed||{},deleted:remote.deleted||{}}))break;
+      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},orders:remote.orders||{},viewed:remote.viewed||{},views:remote.views||{},deleted:remote.deleted||{}}))break;
       const p=await gh('PUT',{message:'BidPilot CRM update',content:b64e(JSON.stringify(merged,null,1)),...(sha?{sha}:{})});
       if(p.status===409||p.status===422)continue;
       if(!p.ok)throw new Error(p.status===403||p.status===404?'token needs Contents read/write on this repo':'GitHub '+p.status);
@@ -257,7 +265,7 @@ const seen=r=>!!CRM.viewed[vkey(r)];
 function markSeen(r,on=true){const k=vkey(r);if(on){if(CRM.viewed[k])return;CRM.viewed[k]={saved:nowIso()};delete CRM.deleted['v:'+k]}else{delete CRM.viewed[k];CRM.deleted['v:'+k]=nowIso()}
   CRM.pipeline=pipe;store.set('bp_crm',CRM);scheduleSync()}
 function pruneSeen(){const open=new Set(D.rows.map(vkey));for(const k of Object.keys(CRM.viewed))if(!open.has(k))delete CRM.viewed[k]}
-function refreshViews(){pipeCount();renderTable();ordBadge();if(!$('#pipeView').classList.contains('hidden')){renderPipe();renderSup();renderOrd()}}
+function refreshViews(){renderViews();pipeCount();renderTable();ordBadge();if(!$('#pipeView').classList.contains('hidden')){renderPipe();renderSup();renderOrd()}}
 
 let fscSel=new Set(store.get('t2_fscSel',[])), sortK=8, sortDir=1, page=0, PER=100, filtered=[];
 
@@ -278,13 +286,37 @@ $('#fscIn').addEventListener('change',e=>{
 $('#saveMine').onclick=()=>{store.set('t2_myfsc',[...fscSel]);alert(`Saved ${fscSel.size} FSCs as My FSCs`)};
 $('#loadMine').onclick=()=>{fscSel=new Set(store.get('t2_myfsc',[]));chips();run()};
 
+// Set-aside checkboxes
+$('#saBox').innerHTML=Object.entries(SA).map(([c,n])=>`<label><input type="checkbox" value="${c}">${n}</label>`).join('');
+$('#saBox').addEventListener('change',()=>{page=0;run()});
+// Pasted NSN / part number list
+let _nlTxt=null,_nl=null;
+function nsnListSet(){const t=$('#nsnList').value;if(t===_nlTxt)return _nl;_nlTxt=t;const toks=t.split(/[\s,;]+/).map(x=>x.replace(/-/g,'').toUpperCase()).filter(x=>x.length>=3);_nl=toks.length?new Set(toks):null;$('#nsnListN').textContent=_nl?`${_nl.size} NSNs / part numbers`:'';return _nl}
+// Saved views: every filter, the FSC list and the sort, saved under a name. Synced with the CRM.
+const VIEW_IDS=['q','nsnList','posted','fsg','amsc','asf','cage','hist','fobF','inspF','type','close','minleft','qmin','qmax'];
+let curView='';
+function captureView(){const v={};for(const id of VIEW_IDS)v[id]=$('#'+id).value;v.hideSeen=$('#hideSeen').checked;v.sa=[...document.querySelectorAll('#saBox input:checked')].map(i=>i.value);v.fsc=[...fscSel];v.sortK=sortK;v.sortDir=sortDir;return v}
+function applyView(v){for(const id of VIEW_IDS)$('#'+id).value=v[id]??(id==='minleft'?'0':'');$('#hideSeen').checked=!!v.hideSeen;document.querySelectorAll('#saBox input').forEach(i=>i.checked=(v.sa||[]).includes(i.value));fscSel=new Set(v.fsc||[]);sortK=v.sortK??8;sortDir=v.sortDir??1;page=0;chips();run()}
+function renderViews(){
+  const vs=Object.entries(CRM.views||{}).sort((a,b)=>(a[1].order||0)-(b[1].order||0));
+  $('#vtabs').innerHTML=`<span class="vtab ${curView===''?'on':''}" data-v="">All RFQs</span>`+vs.map(([id,v])=>`<span class="vtab ${curView===id?'on':''}" data-v="${esc(id)}">${esc(v.name)} <b data-del="${esc(id)}" title="Delete view">×</b></span>`).join('')+`<span class="vtab" id="vSave" title="Save the current filters as a tab">+ Save view</span>${curView?'<span class="vtab" id="vUpd" title="Overwrite this tab with the current filters">Update view</span>':''}`;
+}
+$('#vtabs').onclick=e=>{
+  const d=e.target.closest('[data-del]');if(d){const id=d.dataset.del;if(confirm('Delete this view?')){delete CRM.views[id];CRM.deleted['w:'+id]=nowIso();crmSave();if(curView===id)curView='';renderViews()}return}
+  if(e.target.closest('#vSave')){const name=prompt('Name this view (e.g. "My FSCs · small business · closing 7 days")');if(!name)return;const id='w'+Date.now().toString(36);CRM.views[id]={name:name.trim(),f:captureView(),order:Date.now(),saved:nowIso()};crmSave();curView=id;renderViews();return}
+  if(e.target.closest('#vUpd')){const v=CRM.views[curView];if(v){v.f=captureView();v.saved=nowIso();crmSave();renderViews()}return}
+  const t=e.target.closest('[data-v]');if(!t)return;curView=t.dataset.v;
+  if(curView==='')$('#reset').click();else applyView(CRM.views[curView].f);renderViews();
+};
 function filt(skipFsc){
-  const hideSeen=$('#hideSeen').checked, fobF=$('#fobF').value, inspF=$('#inspF').value, hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, sa=$('#sa').value, am=$('#amsc').value, ty=$('#type').value;
+  const saSet=new Set([...document.querySelectorAll('#saBox input:checked')].map(i=>i.value)), posted=$('#posted').value, nl=nsnListSet(), hideSeen=$('#hideSeen').checked, fobF=$('#fobF').value, inspF=$('#inspF').value, hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, am=$('#amsc').value, ty=$('#type').value;
   const cl=+$('#close').value||0, ml=+$('#minleft').value||0, qmin=+$('#qmin').value||0, qmax=+$('#qmax').value||0;
   return D.rows.filter(r=>{
     const as=r[15]||[];
     if(q && !(`${r[0]} ${r[1]} ${r[4]} ${r[2]} ${as.map(a=>a.join(' ')).join(' ')}`.toLowerCase().replace(/-/g,'').includes(q)))return false;
     if(hideSeen && seen(r))return false;
+    if(posted!=='' && r[7] && -daysLeft(r[7])>+posted)return false;
+    if(nl && !nl.has(String(r[1]).replace(/[-\s]/g,'').toUpperCase()) && !as.some(a=>nl.has(String(a[1]).replace(/[-\s]/g,'').toUpperCase())))return false;
     if(fobF && r[12]!==fobF)return false;
     if(inspF && r[16]!==inspF)return false;
     const sm=sumOf(r);
@@ -296,7 +328,7 @@ function filt(skipFsc){
     if(cages.length&&!as.some(a=>cages.includes(a[0])))return false;
     if(!skipFsc && fscSel.size && !fscSel.has(r[3]))return false;
     if(fsg && (r[3]||'').slice(0,2)!==fsg)return false;
-    if(sa && r[9]!==sa)return false;
+    if(saSet.size && !saSet.has(r[9]))return false;
     if(am==='open'&&!openAmsc(r[10]))return false;
     if(am==='restricted'&&openAmsc(r[10]))return false;
     if(ty && (r[11]||'M')!==ty)return false;
@@ -330,8 +362,8 @@ function renderFscList(){
   $('#fscList').innerHTML=Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,150).map(([f,n])=>`<div data-f="${f}"><span>${f} ${esc((FSC[f]||'').slice(0,30))}</span><b>${n}</b></div>`).join('')||'<div class="small">None</div>';
 }
 $('#fscList').onclick=e=>{const d=e.target.closest('[data-f]');if(d){fscSel.add(d.dataset.f);chips();run()}};
-['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#hideSeen','#fobF','#inspF','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
-$('#reset').onclick=()=>{['#q','#fsg','#sa','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();$('#hideSeen').checked=false;chips();run()};
+['#q','#nsnList','#posted','#fsg','#amsc','#asf','#cage','#hist','#hideSeen','#fobF','#inspF','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
+$('#reset').onclick=()=>{document.querySelectorAll('#saBox input').forEach(i=>i.checked=false);curView='';renderViews();['#q','#nsnList','#posted','#fsg','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();$('#hideSeen').checked=false;chips();run()};
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=+th.dataset.k;sortDir=sortK===k?-sortDir:1;sortK=k;run()});
 $('#prev').onclick=()=>{if(page>0){page--;renderTable()}};
 $('#next').onclick=()=>{if((page+1)*PER<filtered.length){page++;renderTable()}};
@@ -739,7 +771,7 @@ $('#pipeCsv').onclick=()=>csv(Object.values(pipe).map(p=>{const r=p.row;const qs
 $('#tabFind').onclick=()=>{$('#findView').classList.remove('hidden');$('#pipeView').classList.add('hidden');$('#tabFind').classList.add('on');$('#tabPipe').classList.remove('on')};
 $('#tabPipe').onclick=()=>{$('#pipeView').classList.remove('hidden');$('#findView').classList.add('hidden');$('#tabPipe').classList.add('on');$('#tabFind').classList.remove('on');renderPipe();renderSup();renderOrd()};
 
-pruneSeen(); chips(); pipeCount(); run(); syncBadge('Local only'); ordBadge(); (CFG.repo&&CFG.token?sync():Promise.resolve()).then(autoOutcomes);
+pruneSeen(); renderViews(); chips(); pipeCount(); run(); syncBadge('Local only'); ordBadge(); (CFG.repo&&CFG.token?sync():Promise.resolve()).then(autoOutcomes);
 </script>
 </body>
 </html>
