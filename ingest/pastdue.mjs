@@ -12,7 +12,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { get, parseIndex, unzip, parseAS, parseBatch } from './fetch.mjs';
+import { get, raw, parseIndex, unzip, parseAS, parseBatch } from './fetch.mjs';
 
 const DIBBS = 'https://www.dibbs.bsm.dla.mil';
 const args = process.argv.slice(2);
@@ -38,23 +38,59 @@ const key = (r) => `${r[0]}:${r[2]}:${r[1]}`;
 // so matching the title-case status words avoids e.g. "WRENCH, OPEN END".
 const SOL_RE = /\b(SP[A-Z0-9]{4})-?(\d{2})-?([A-Z])-?([A-Z0-9]{4})\b/;
 const STATUS_RE = /\b(Open|Closed|Cancell?ed|Awarded|Expired|Suspended|Pending|Archived)\b/;
+const strip = (h) => h.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 export function parseNsnSearch(html) {
   const out = new Map();
   for (const chunk of html.split(/<tr[\s>]/i).slice(1)) {
-    const text = chunk.split(/<\/tr>/i)[0].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
+    const row = chunk.split(/<\/tr>/i)[0];
+    // Real results grid: <span id="..._lblSolicitation"> and <span id="..._lblStatus"><span>Open</span>...
+    const solCell = row.match(/_lblSolicitation"[^>]*>([\s\S]*?)<\/td>/i), stCell = row.match(/_lblStatus"[^>]*>([\s\S]*?)<\/td>/i);
+    const text = strip(solCell ? solCell[1] : row);
     const s = text.match(SOL_RE); if (!s) continue;
-    const st = text.match(STATUS_RE);
+    const st = (stCell ? strip(stCell[1]) : strip(row)).match(STATUS_RE);
     const sol = s[1] + s[2] + s[3] + s[4];
     if (!out.has(sol) || st) out.set(sol, st ? st[1].replace('Canceled', 'Cancelled') : '');
   }
   return out;
 }
-const nsnUrl = (nsn) => `${DIBBS}/RFQ/RFQNsn.aspx?value=${encodeURIComponent(nsn)}&category=issue&Scope=all`;
+
+// DIBBS's header quick search ("RFQs - NSN"), the same form a browser submits. It returns
+// RfqRecs.aspx: "All RFQs where NSN/Part Numbers: ..." with an RFQ/Quote Status column.
+let formPage = null; // { url, html } of the last DIBBS page, reused for the next search's form fields
+function formFields(html) {
+  const f = new URLSearchParams();
+  for (const m of html.matchAll(/<input[^>]*type="hidden"[^>]*>/gi)) {
+    const name = m[0].match(/name="([^"]*)"/)?.[1]; if (!name) continue;
+    f.set(name, (m[0].match(/value="([^"]*)"/)?.[1] ?? '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'"));
+  }
+  const nav = html.match(/name="ctl00\$ddlNavigation"[\s\S]*?<\/select>/i)?.[0] || '';
+  const navVal = (nav.match(/<option[^>]*selected[^>]*value="([^"]*)"/i) || nav.match(/<option[^>]*value="([^"]*)"[^>]*selected/i) || nav.match(/<option[^>]*value="([^"]*)"/i) || [])[1];
+  if (navVal !== undefined) f.set('ctl00$ddlNavigation', navVal);
+  return f;
+}
+export async function searchNsn(nsn) {
+  if (!formPage) { const url = `${DIBBS}/RFQ/RFQDates.aspx?category=recent`; formPage = { url, html: await get(url) }; }
+  const f = formFields(formPage.html);
+  f.set('__EVENTTARGET', 'ctl00$butDbSearch'); f.set('__EVENTARGUMENT', '');
+  f.set('ctl00$ddlGotoDB', 'rfqnsn'); f.set('ctl00$txtValue', nsn);
+  const action = formPage.html.match(/<form[^>]*action="([^"]*)"/i)?.[1];
+  const postUrl = action ? new URL(action.replace(/&amp;/g, '&'), formPage.url).href : formPage.url;
+  await new Promise((r) => setTimeout(r, 400));
+  const res = await raw(postUrl, { method: 'POST', body: f.toString().replace(/%20/g, '+'), headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: formPage.url, Origin: DIBBS } });
+  let html, url = postUrl;
+  if (res.status >= 300 && res.status < 400 && res.headers.location) { url = new URL(res.headers.location, postUrl).href; html = await get(url); }
+  else { html = res.body.toString('latin1'); if (res.status >= 400) { formPage = null; throw new Error(`HTTP ${res.status}`); } }
+  if (/name="butAgree"|Request Rejected/i.test(html)) { formPage = null; throw new Error('consent or WAF page instead of results'); }
+  if (/__VIEWSTATE/.test(html)) formPage = { url, html }; else formPage = null;
+  return html;
+}
 
 async function main() {
   const queue = readJson(QUEUE, { rows: [] });
   const shownPrev = (() => { try { const t = fs.readFileSync(OUT, 'utf8'); return JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)).rows || []; } catch { return []; } })();
-  const st = readJson(STATE, { tries: {}, gone: {}, backfilled: [] });
+  const st0 = readJson(STATE, { tries: {}, gone: {}, backfilled: [] });
+  // v2: earlier runs used a page without the status column; forget their retry counts.
+  const st = st0.v === 2 ? st0 : { ...st0, tries: {}, gone: Object.fromEntries(Object.entries(st0.gone || {}).filter(([, v]) => v !== 'not listed')) };
   const gone = new Map(Object.entries(st.gone || {})); // key -> status seen, never re-added
   const tries = new Map(Object.entries(st.tries || {}));
   const backfilled = new Set(st.backfilled || []);
@@ -104,26 +140,28 @@ async function main() {
   const work = [...byNsn.entries()].sort((a, b) => a[1].pri - b[1].pri);
   log(`${cand.size} past-due candidates, ${shown.size} shown, ${work.length} NSNs to check`);
 
-  let checked = 0, open = 0, closed = 0, unknown = 0, failed = 0, sample = null;
+  let checked = 0, open = 0, closed = 0, unknown = 0, failed = 0, sample = null, withRows = 0, firstEmpty = null;
+  const unlisted = []; // counted as a failed check only if this run's searches returned real results
   for (const [nsn, e] of work) {
     if (left() < 30e3) break;
     let page;
-    try { page = await get(nsnUrl(nsn)); if (!SOL_RE.test(page.replace(/<[^>]+>/g, ' '))) page = await get(nsnUrl(nsn).replace('Scope=all', 'Scope=')); } catch (err) { failed++; if (failed <= 3) log('NSN search failed', nsn, err.message); if (failed > 25 && !checked) { log('DIBBS NSN search not reachable; stopping'); break; } continue; }
+    try { page = await searchNsn(nsn); } catch (err) { failed++; if (failed <= 3) log('NSN search failed', nsn, err.message); if (failed > 25 && !checked) { log('DIBBS NSN search not reachable; stopping'); break; } continue; }
     const status = parseNsnSearch(page);
+    if (status.size) withRows++; else if (!firstEmpty) firstEmpty = `${nsn}: page title "${(page.match(/<title>([^<]*)/i) || [])[1]?.trim() || '?'}", ${page.length} bytes, ${/No records|no matching/i.test(page) ? 'says no records' : 'no RFQ rows found'}`;
     if (!sample && status.size) sample = `${nsn}: ${[...status].slice(0, 4).map(([s, v]) => `${s}=${v || '?'}`).join(', ')}`;
     checked++;
     for (const r of e.rows) {
       const k = key(r), s = status.get(r[0]);
       if (s === 'Open') { shown.set(k, [...r.slice(0, 17), today]); tries.delete(k); open++; }
       else if (s) { shown.delete(k); gone.set(k, s); tries.delete(k); closed++; }
-      else { // not listed or no status: keep trying a few times, never show unverified
-        const n = (+tries.get(k) || 0) + 1; unknown++;
-        if (n >= MAX_TRIES) { shown.delete(k); gone.set(k, 'not listed'); tries.delete(k); } else tries.set(k, n);
-      }
+      else { unknown++; unlisted.push(k); } // not listed or no status: never shown unverified
     }
     if (checked % 200 === 0) log(`${checked} NSNs checked`);
   }
   if (sample) log('sample status read:', sample);
+  if (firstEmpty) log('first search with no RFQ rows:', firstEmpty);
+  if (withRows) for (const k of unlisted) { const n = (+tries.get(k) || 0) + 1; if (n >= MAX_TRIES) { shown.delete(k); gone.set(k, 'not listed'); tries.delete(k); } else tries.set(k, n); }
+  else if (checked) log('WARNING: no search returned RFQ rows, so nothing was marked as checked this run');
   log(`checked ${checked} NSNs: ${open} lines still open, ${closed} closed/awarded/cancelled, ${unknown} not listed yet, ${failed} failed`);
 
   // Queue keeps candidates not decided yet; gone list trimmed to lines that could still re-appear.
@@ -132,7 +170,7 @@ async function main() {
   fs.writeFileSync(QUEUE, JSON.stringify({ rows: pending }));
   const goneObj = {}; for (const [k, v] of gone) goneObj[k] = v;
   const keepGone = Object.fromEntries(Object.entries(goneObj).slice(-60000));
-  fs.writeFileSync(STATE, JSON.stringify({ tries: Object.fromEntries(tries), gone: keepGone, backfilled: [...backfilled].sort().slice(-800) }));
+  fs.writeFileSync(STATE, JSON.stringify({ v: 2, tries: Object.fromEntries(tries), gone: keepGone, backfilled: [...backfilled].sort().slice(-800) }));
   fs.writeFileSync(OUT, 'window.PASTDUE_LOAD&&PASTDUE_LOAD(' + JSON.stringify({ updated: new Date().toISOString(), rows }) + ');\n');
   log(`wrote ${rows.length} past-due open RFQ lines; ${pending.length} still waiting for a check`);
 }
