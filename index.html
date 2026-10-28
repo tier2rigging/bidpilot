@@ -692,6 +692,8 @@ function reqChecklist(res,it){
   if(it.drawing)c.push('Drawing / technical data referenced. Check cFolders before quoting.');
   if(it.packaging.length)c.push(`<b>Military packaging</b> per ${esc(it.pkgStd||'MIL-STD-2073')} (codes below). Confirm your supplier or a packager can do it, and price it in.`);
   if(it.marking||res.standards.some(s=>/129/.test(s)))c.push('<b>MIL-STD-129 marking</b>: military shipping label (MSL) with bar codes on each unit, intermediate and exterior container.');
+  if(has('252.211-7006'))c.push('<b>RFID required</b> (DFARS 252.211-7006): passive RFID tags on each case and pallet, plus an advance shipment notice in WAWF/PIEE with the tag IDs. Budget for tags and a printer/encoder or a labeling service.');
+  else if(it.marking||res.standards.some(s=>/129/.test(s)))c.push('<b>No RFID</b>: this RFQ doesn\'t include the RFID clause (DFARS 252.211-7006). A standard MIL-STD-129 bar-code label is enough. Recheck the award, since a clause added there would change this.');
   if(it.palletization)c.push('Palletize per RP001 when shipping multiple boxes.');
   if(it.iuid&&!/not required/i.test(it.iuid))c.push('<b>IUID</b> marking may be required (2D data matrix). Read the IUID note.');
   if(it.transport.some(t=>/FASTEST|NMCS|777|999|EXPEDITE/i.test(t)))c.push('<b>Priority shipment</b>: ship by the fastest traceable means.');
