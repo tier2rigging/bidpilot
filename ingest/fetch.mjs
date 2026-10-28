@@ -291,6 +291,15 @@ async function main() {
 
   // Keep only RFQs still open (return-by today or later).
   const rows = [...byKey.values()].filter((r) => !r[8] || r[8] >= today);
+  // Lines past their return-by date go to the past-due queue; ingest/pastdue.mjs keeps the ones DIBBS still shows Open.
+  const QF = path.resolve('data/pastdue-queue.json');
+  let q = { rows: [] }; try { q = JSON.parse(fs.readFileSync(QF, 'utf8')); } catch {}
+  const qk = new Set(q.rows.map((r) => `${r[0]}:${r[2]}:${r[1]}`));
+  let nq = 0;
+  for (const r of byKey.values()) if (r[8] && r[8] < today && !qk.has(`${r[0]}:${r[2]}:${r[1]}`)) { q.rows.push(r); nq++; }
+  fs.mkdirSync(path.dirname(QF), { recursive: true });
+  fs.writeFileSync(QF, JSON.stringify(q));
+  log(`${nq} lines passed their return-by date (queued for an open-status check)`);
   rows.sort((a, b) => (a[8] || '').localeCompare(b[8] || ''));
   const keep = [...done].sort().slice(-60);
   const nb = saveBq(bqRaw, new Set(rows.map((r) => `${r[0]}:${r[2]}`)));
