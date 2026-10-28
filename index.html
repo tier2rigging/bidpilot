@@ -84,7 +84,9 @@ header .brand .tag{background:none;padding:0;font-weight:500;font-size:11px;colo
 nav{gap:0;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:3px}
 nav button{border:0;background:transparent;border-radius:7px;padding:6px 14px;color:var(--ink2)}
 nav button.on{background:var(--acc);color:#fff;box-shadow:var(--shadow)}
-main{gap:18px;padding:18px 20px}
+main{gap:16px;padding:16px;max-width:none;grid-template-columns:270px minmax(0,1fr)}
+@media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+main>section,main>div{min-width:0}
 .card{border-radius:var(--r);box-shadow:var(--shadow);padding:14px}
 aside .card{padding:14px 16px}
 label{font-size:10.5px;letter-spacing:.06em;color:var(--mute);margin:14px 0 5px}
@@ -134,6 +136,15 @@ tbody tr:hover td{background:var(--hov)!important}
 .sync{border-radius:999px;padding:3px 10px}
 .banner{border-radius:var(--r);border:1px solid rgba(154,91,0,.18)}
 .qrow{border-radius:var(--r);background:var(--card)}
+/* Fit the RFQ table on laptop screens: stack small tags, wrap long cells */
+#findView th{padding:9px 7px}#findView td{padding:7px 7px}
+#tb td.nom{white-space:normal;min-width:170px;max-width:280px;overflow-wrap:anywhere}
+#tb td:nth-child(2) .tag{display:table;margin-top:3px}
+#tb td:nth-child(2) .dot{margin-right:4px}
+#tb td:nth-child(11){white-space:normal;min-width:96px;max-width:130px}
+#tb td:nth-child(11) .tag{margin-top:2px}
+#findView thead th{white-space:normal;line-height:1.25;vertical-align:bottom}
+@media (max-width:1700px){main{grid-template-columns:240px minmax(0,1fr)}#findView thead th:nth-child(14),#tb td:nth-child(14){display:none}#tb td.nom{width:170px;max-width:170px;min-width:150px}#findView th,#findView td{padding-left:6px;padding-right:6px}}
 ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#c9d0da;border-radius:8px;border:2px solid var(--bg)}::-webkit-scrollbar-track{background:transparent}
 @media (prefers-color-scheme:dark){::-webkit-scrollbar-thumb{background:#333b48}}
 </style>
