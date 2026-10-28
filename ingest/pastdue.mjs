@@ -23,7 +23,7 @@ const OUT = path.resolve('data/pastdue.js');
 const STATE = path.resolve('data/pastdue-state.json');
 const MAX_TRIES = 4;          // give up on a line DIBBS never lists after this many checks
 const RECHECK_DAYS = 2;       // shown lines are re-verified at least this often (time permitting)
-const MAX_AGE_DAYS = 730;     // stop tracking lines whose return-by date is older than this
+const MAX_AGE_DAYS = 183;     // track past-due lines up to ~6 months after their return-by date
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const t0 = Date.now();
 const left = () => MINUTES * 60e3 - (Date.now() - t0);
@@ -138,7 +138,7 @@ async function main() {
   const byNsn = new Map();
   const want = (r, pri) => { const n = r[1]; if (!n) return; const e = byNsn.get(n) || { pri: 9e9, rows: [] }; e.rows.push(r); e.pri = Math.min(e.pri, pri); byNsn.set(n, e); };
   for (const r of cand.values()) if (!shown.has(key(r))) want(r, -1);
-  for (const r of shown.values()) { const age = r[17] ? daysAgo(r[17]) : 99; if (age >= RECHECK_DAYS) want(r, -age / 1000 + 1); else if (daysAgo(r[8]) > MAX_AGE_DAYS) shown.delete(key(r)); }
+  for (const r of [...shown.values()]) { if (daysAgo(r[8]) > MAX_AGE_DAYS) { shown.delete(key(r)); continue; } const age = r[17] ? daysAgo(r[17]) : 99; if (age >= RECHECK_DAYS) want(r, -age / 1000 + 1); }
   const work = [...byNsn.entries()].sort((a, b) => a[1].pri - b[1].pri);
   log(`${cand.size} past-due candidates, ${shown.size} shown, ${work.length} NSNs to check`);
 

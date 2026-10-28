@@ -294,6 +294,7 @@ const histRead=r=>!!(HS[r[1]]||sumOf(r));
 function sugOf(r){
   if(pipe[key(r)])return null;
   const pd=!!r[17];                            // past due but DIBBS still showed it Open
+  if(pd&&-daysLeft(r[8])>183)return null;      // return-by more than ~6 months ago: skip
   if(pd&&-daysLeft(r[17])>7)return null;       // only if confirmed Open in the last week
   const dl=daysLeft(r[8]);if(!pd&&dl!==null&&dl<3)return null;
   const as=r[15]||[],z=r[10]==='Z';
@@ -591,6 +592,7 @@ function filt(skipFsc){
     const as=r[15]||[];
     if(pdF===''&&r[17]&&curView!=='sugg')return false;
     if(pdF==='pd'&&!r[17])return false;
+    if(r[17]&&-daysLeft(r[8])>183)return false;
     if(q && !(`${r[0]} ${r[1]} ${r[4]} ${r[2]} ${as.map(a=>a.join(' ')).join(' ')}`.toLowerCase().replace(/-/g,'').includes(q)))return false;
     if(hideSeen && seen(r))return false;
     if(posted!=='' && r[7] && -daysLeft(r[7])>+posted)return false;
