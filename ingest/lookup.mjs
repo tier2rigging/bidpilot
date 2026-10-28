@@ -86,7 +86,8 @@ export function parseNsnPage(html) {
 
 async function nsnPage(nsn) {
   const u = `${DIBBS}/RFQ/RFQNsn.aspx?value=${nsn}&category=issue&Scope=all`;
-  let p = parseNsnPage(await get(u));
+  const __h = await get(u); if (process.env.LK_PROBE) { globalThis.__opts = [...__h.matchAll(/<option[^>]*value="([^"]*)"[^>]*>([^<]*)/gi)].map((m) => [m[1], m[2].trim()]); globalThis.__forms = [...__h.matchAll(/<(?:form|input|select)[^>]*>/gi)].map((m) => m[0]).slice(0, 40); }
+  let p = parseNsnPage(__h);
   if (!p.sols.length) { const q = parseNsnPage(await get(u.replace('Scope=all', 'Scope='))); if (q.sols.length) p = q; }
   return p;
 }
@@ -146,6 +147,7 @@ async function main() {
   // Looked-up solicitation first, then listed ones newest first.
   out.sols.sort((x, y) => (y.sol === q) - (x.sol === q) || (y.status === 'Listed') - (x.status === 'Listed') || (y.issue || '').localeCompare(x.issue || ''));
 
+  if (process.env.LK_PROBE) { out.probe = { opts: globalThis.__opts, forms: globalThis.__forms }; for (const u of (process.env.LK_PROBE_URLS || '').split(' ').filter(Boolean)) { try { const h = await get(u); out.probe[u] = h.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(-1800) + ' PDFS:' + [...h.matchAll(/href=["']([^"']+\.pdf)/gi)].map((m) => m[1]).slice(0, 10).join(' '); } catch (e) { out.probe[u] = 'ERR ' + e.message; } } }
   fs.mkdirSync(DIR, { recursive: true });
   fs.writeFileSync(path.join(DIR, `${q}.json`), JSON.stringify(out));
   const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.json')).map((f) => [f, fs.statSync(path.join(DIR, f)).mtimeMs]).sort((a, b) => b[1] - a[1]);
