@@ -86,10 +86,29 @@ export function parseNsnPage(html) {
 
 async function nsnPage(nsn) {
   const u = `${DIBBS}/RFQ/RFQNsn.aspx?value=${nsn}&category=issue&Scope=all`;
-  const __h = await get(u); if (process.env.LK_PROBE) { globalThis.__opts = [...__h.matchAll(/<option[^>]*value="([^"]*)"[^>]*>([^<]*)/gi)].map((m) => [m[1], m[2].trim()]); globalThis.__forms = [...__h.matchAll(/<(?:form|input|select)[^>]*>/gi)].map((m) => m[0]).slice(0, 40); }
-  let p = parseNsnPage(__h);
+  let p = parseNsnPage(await get(u));
   if (!p.sols.length) { const q = parseNsnPage(await get(u.replace('Scope=all', 'Scope='))); if (q.sols.length) p = q; }
   return p;
+}
+
+// Contract details from USAspending (public): awardee, total, mods (e.g. a cancellation) and the
+// solicitation it came from. DIBBS drops old award PDFs; USAspending keeps the record.
+const US = 'https://api.usaspending.gov/api/v2';
+async function usPost(p, body) { const r = await fetch(US + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (!r.ok) throw new Error('USAspending ' + r.status); return r.json(); }
+export async function contractInfo(piid) {
+  const base = piid.replace(/P\d{5}$/, '');
+  const j = await usPost('/search/spending_by_award/', { filters: { award_type_codes: ['A', 'B', 'C', 'D'], keywords: [base], time_period: [{ start_date: '2007-10-01', end_date: '2030-09-30' }] }, fields: ['Award ID', 'Recipient Name', 'Award Amount', 'Start Date', 'End Date', 'generated_internal_id'], limit: 5 });
+  const a = (j.results || []).find((x) => x['Award ID'] === base); if (!a) return null;
+  const id = a.generated_internal_id;
+  const info = { piid: base, recipient: a['Recipient Name'] || '', amount: a['Award Amount'], start: a['Start Date'] || '', end: a['End Date'] || '', url: `https://www.usaspending.gov/award/${id}`, mods: [], sol: '' };
+  try {
+    const t = await usPost('/transactions/', { award_id: id, limit: 25, sort: 'action_date', order: 'asc' });
+    info.mods = (t.results || []).map((x) => ({ mod: x.modification_number || '0', date: x.action_date || '', type: x.action_type_description || (x.modification_number === '0' ? 'Original award' : ''), amount: x.federal_action_obligation }));
+  } catch {}
+  try {
+    const r = await fetch(`${US}/awards/${encodeURIComponent(id)}/`); if (r.ok) { const d = await r.json(); info.sol = (d.latest_transaction_contract_data || {}).solicitation_identifier || ''; }
+  } catch {}
+  return info;
 }
 
 async function awardsFor(nsn) {
@@ -142,12 +161,16 @@ async function main() {
   if (out.nsn) {
     if (out.kind === 'sol') { await readNsn(out.nsn); if (!sol(q).status) sol(q).status = 'Not listed'; }
     if (histText) { const h = parseHistory(histText).get(out.nsn); if (h) out.history = h; }
+    out.contracts = {};
+    for (const h of out.history.slice(0, 12)) {
+      const base = h[1].replace(/P\d{5}$/, ''); if (out.contracts[base]) continue;
+      try { const c = await contractInfo(h[1]); if (c) out.contracts[base] = c; } catch (e) { err(`contract ${base}`, e); }
+    }
     try { out.awards = await awardsFor(out.nsn); } catch (e) { err('awards', e); }
   } else if (out.kind === 'sol') out.errors.push('could not find the NSN (RFQ PDF not available)');
   // Looked-up solicitation first, then listed ones newest first.
   out.sols.sort((x, y) => (y.sol === q) - (x.sol === q) || (y.status === 'Listed') - (x.status === 'Listed') || (y.issue || '').localeCompare(x.issue || ''));
 
-  if (process.env.LK_PROBE) { out.probe = { opts: globalThis.__opts, forms: globalThis.__forms }; for (const u of (process.env.LK_PROBE_URLS || '').split(' ').filter(Boolean)) { try { const h = await get(u); out.probe[u] = h.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(-1800) + ' PDFS:' + [...h.matchAll(/href=["']([^"']+\.pdf)/gi)].map((m) => m[1]).slice(0, 10).join(' '); } catch (e) { out.probe[u] = 'ERR ' + e.message; } } }
   fs.mkdirSync(DIR, { recursive: true });
   fs.writeFileSync(path.join(DIR, `${q}.json`), JSON.stringify(out));
   const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.json')).map((f) => [f, fs.statSync(path.join(DIR, f)).mtimeMs]).sort((a, b) => b[1] - a[1]);

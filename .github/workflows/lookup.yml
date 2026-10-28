@@ -30,9 +30,7 @@ jobs:
       - name: Look up on DIBBS
         env:
           Q: ${{ github.event.inputs.q }}
-          LK_PROBE: "1"
-          LK_PROBE_URLS: "https://www.dibbs.bsm.dla.mil/Awards/AwdRecs.aspx?Category=cn&TypeSrch=cq&Value=SPE7L124V4230 https://www.dibbs.bsm.dla.mil/Awards/AwdRecs.aspx?Category=awdnum&TypeSrch=cq&Value=SPE7L124V4230 https://www.dibbs.bsm.dla.mil/Awards/AwdRecs.aspx?Category=contract&TypeSrch=cq&Value=SPE7L124V4230"
-        run: node ingest/lookup.mjs --q "$Q"; [ -n "$LK_PROBE" ] && node ingest/probe-awd.mjs || true
+        run: node ingest/lookup.mjs --q "$Q"
       - name: Save result
         env:
           Q: ${{ github.event.inputs.q }}
