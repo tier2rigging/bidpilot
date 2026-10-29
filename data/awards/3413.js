@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("3413",[["SPE8E627V0220 &raquo; Award/Basic Package View","","","","7Z016",1210.98,"2026-10-28","2026-10-28","3413013728656","SPINDLE ASSEMBLY, DR","7018560275","SPE8E526T4547","https://dibbs2.bsm.dla.mil/Downloads/Awards/28OCT26/SPE8E627V0220.PDF",null,"",null,null]]);

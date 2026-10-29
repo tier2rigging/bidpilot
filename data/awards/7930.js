@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("7930",[["SPE8E527V0070 &raquo; Award/Basic Package View","","","","7TGR2",674,"2026-10-27","2026-10-27","7930013670994","CLEANING SOLVENT, GE","7018707920","SPE8E527T0222","https://dibbs2.bsm.dla.mil/Downloads/Awards/27OCT26/SPE8E527V0070.PDF",null,"",-1,""]]);

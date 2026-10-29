@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("7195",[["SPE8E527V0067 &raquo; Award/Basic Package View","","","","63422",120569.85,"2026-10-27","2026-10-27","7195009731961","TABLE, PARACHUTE PACKING","7018728928","SPE8E527T0187","https://dibbs2.bsm.dla.mil/Downloads/Awards/27OCT26/SPE8E527V0067.PDF",null,"",null,null]]);
