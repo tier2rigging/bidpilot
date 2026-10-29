@@ -58,6 +58,7 @@ td.nom{white-space:normal;min-width:160px}
 .verdict{border-radius:8px;padding:8px 10px;margin-top:8px;font-size:13px}.v-go{background:var(--okb);color:var(--ok)}.v-chk{background:var(--warnb);color:var(--warn)}.v-no{background:var(--acc2);color:var(--acc)}
 .sumgrid{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px;margin-top:8px}.sumgrid div:nth-child(odd){color:var(--mute)}
 #modalBox.wide{width:min(820px,100%);max-height:90vh;overflow:auto}
+#modalBox.wide table.aw{width:100%;table-layout:auto}#modalBox.wide table.aw td{white-space:normal;word-break:normal;overflow-wrap:break-word}
 #modalBox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(560px,100%)}
 .sync{font-size:12px;padding:3px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--line);cursor:pointer}
 .sync.ok{color:var(--ok);background:var(--okb)}.sync.err{color:var(--acc);background:var(--acc2)}
@@ -179,10 +180,10 @@ tbody tr:hover td{background:var(--hov)!important}
       </div>
       <label>Group (FSG)</label>
       <select id="fsg"><option value="">All groups</option></select>
-      <label>Set-aside</label>
+      <label>Set-aside <a href="#" class="cgLink" data-g="sa" title="What the codes mean" style="text-transform:none;font-weight:600">ⓘ what these mean</a></label>
       <div class="sachk" id="saBox"></div>
-      <label>Tech data / sources (AMSC)</label>
-      <select id="amsc"><option value="">Any</option><option value="Z">Commercial items: COTS (AMSC Z)</option><option value="open">Open competition (G, Z, blank)</option><option value="restricted">Approved-source / restricted</option></select>
+      <label>Tech data / sources (AMSC) <a href="#" class="cgLink" data-g="amsc" title="What the codes mean" style="text-transform:none;font-weight:600">ⓘ what these mean</a></label>
+      <select id="amsc"><option value="">Any</option><option value="resell">I can bid as a reseller (open + approved part listed)</option><option value="resellopen">Open to resellers only (Z, G, L, blank)</option><option value="Z">Commercial items: COTS (AMSC Z)</option><option value="open">Open competition (G, Z, blank)</option><option value="restricted">Approved-source / restricted</option></select>
       <label>Approved sources</label>
       <select id="asf"><option value="">Any</option><option value="none">None listed (anyone can supply)</option><option value="has">Has approved sources</option></select>
       <label>Approved-source CAGE(s)</label>
@@ -194,8 +195,8 @@ tbody tr:hover td{background:var(--hov)!important}
         <div><label>FOB</label><select id="fobF"><option value="">Any</option><option value="O">Origin</option><option value="D">Destination</option></select></div>
         <div><label>Insp./Accept.</label><select id="inspF"><option value="">Any</option><option value="O">Origin</option><option value="D">Destination</option></select></div>
       </div>
-      <label>RFQ type</label>
-      <select id="type"><option value="">Any</option><option value="F">Fast award</option><option value="P">Auto-evaluation</option><option value="M">Manual</option><option value="I">AIDC</option></select>
+      <label>RFQ type <a href="#" class="cgLink" data-g="type" title="What the codes mean" style="text-transform:none;font-weight:600">ⓘ what these mean</a></label>
+      <select id="type"><option value="">Any</option><option value="F">Fast auto-evaluation</option><option value="P">Auto-evaluation</option><option value="M">Buyer evaluated</option><option value="I">AIDC (long-term contract)</option></select>
       <div class="row2">
         <div><label>Posted within</label><select id="posted"><option value="">Any</option><option value="0">Today</option><option value="2">2 days</option><option value="7">7 days</option></select></div></div>
       <div class="row2">
@@ -221,7 +222,7 @@ tbody tr:hover td{background:var(--hov)!important}
     <div class="bar"><strong id="count"></strong><span><button class="btn p" id="addSel">Add selected to pipeline</button> <button class="btn" id="csv">Export CSV</button></span></div>
     <div class="tw"><table>
       <thead><tr>
-        <th><input type="checkbox" id="dSelAll" style="width:auto" title="Select this page"></th><th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC</th><th data-k="15">Sources</th><th data-k="16" title="Last procurement unit price and month (RFQ history + DIBBS awards)">Last buy</th><th data-k="12">FOB</th><th data-k="16" title="Inspection &amp; acceptance point">Insp./Accept.</th><th data-k="11">Type</th><th>Status</th>
+        <th><input type="checkbox" id="dSelAll" style="width:auto" title="Select this page"></th><th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC <a href="#" class="cgLink" data-g="amsc" title="What these codes mean">ⓘ</a></th><th data-k="15">Sources</th><th data-k="16" title="Last procurement unit price and month (RFQ history + DIBBS awards)">Last buy</th><th data-k="12">FOB</th><th data-k="16" title="Inspection &amp; acceptance point">Insp./Accept.</th><th data-k="11">Type <a href="#" class="cgLink" data-g="type" title="What these codes mean">ⓘ</a></th><th>Status</th>
       </tr></thead>
       <tbody id="tb"></tbody>
     </table></div>
@@ -323,8 +324,54 @@ const asWonLast=r=>{const x=lastAw(r);return !!(x&&(r[15]||[]).some(a=>a[0]===x.
 const FILES='https://dibbs2.bsm.dla.mil', DIBBS='https://www.dibbs.bsm.dla.mil';
 const FSG={10:'Weapons',11:'Nuclear ordnance',12:'Fire control',13:'Ammunition & explosives',14:'Guided missiles',15:'Aircraft & airframe',16:'Aircraft components',17:'Aircraft launch/ground handling',18:'Space vehicles',19:'Ships & small craft',20:'Ship & marine equipment',22:'Railway equipment',23:'Ground vehicles',24:'Tractors',25:'Vehicle components',26:'Tires & tubes',28:'Engines & turbines',29:'Engine accessories',30:'Power transmission',31:'Bearings',32:'Woodworking machinery',34:'Metalworking machinery',35:'Service & trade equipment',36:'Special industry machinery',37:'Agricultural machinery',38:'Construction & mining',39:'Materials handling',40:'Rope, cable, chain & fittings',41:'Refrigeration & A/C',42:'Fire fighting, rescue & safety',43:'Pumps & compressors',44:'Furnace & drying equipment',45:'Plumbing & heating',46:'Water purification',47:'Pipe, hose & fittings',48:'Valves',49:'Shop equipment',51:'Hand tools',52:'Measuring tools',53:'Hardware & abrasives',54:'Prefab structures',55:'Lumber & plywood',56:'Construction materials',58:'Communication & radar',59:'Electrical & electronic components',60:'Fiber optics',61:'Electric wire & power',62:'Lighting',63:'Alarm & security',65:'Medical & dental',66:'Instruments & lab',67:'Photographic',68:'Chemicals',69:'Training aids',70:'IT equipment',71:'Furniture',72:'Furnishings',73:'Food prep & serving',74:'Office machines',75:'Office supplies',76:'Books & maps',77:'Musical & radios',78:'Recreational & athletic',79:'Cleaning supplies',80:'Brushes, paints & adhesives',81:'Containers & packaging',83:'Textiles, leather & tents',84:'Clothing & individual equipment',85:'Toiletries',87:'Agricultural supplies',88:'Live animals',89:'Subsistence',91:'Fuels & lubricants',93:'Nonmetallic fabricated materials',94:'Nonmetallic crude materials',95:'Metal bars & sheets',96:'Ores & minerals',99:'Miscellaneous'};
 const SA={N:'Unrestricted',Y:'Small Bus.',L:'WOSB',E:'EDWOSB',H:'HUBZone',R:'SDVOSB',A:'8(a)'};
-const TYPE={F:'Fast award',P:'Auto-eval',I:'AIDC',M:'Manual','':''};
-const AMSC={G:'Full data, open competition',Z:'Commercial item',A:'Data not available',B:'Source-controlled',C:'Engineering source approval required',D:'Data not available',H:'Data not available, qualification',K:'No data rights',L:'Data incomplete',P:'Data in process',Q:'Qualified products list',R:'Data rights not owned',T:'Data inadequate',V:'Data available, not competitive'};
+const TYPE={F:'Fast auto-eval',P:'Auto-eval',I:'AIDC',M:'Buyer evaluated','':''};
+const AMSC={G:'Full data, open competition',Z:'Commercial / off-the-shelf item',A:'Data rights in question',B:'Source-controlled drawing: listed sources only',C:'Engineering source approval required',D:'Data not available, can\'t write a spec',H:'Data insufficient: current sources only',K:'Class 1 castings/forgings required',L:'Low annual value, screened',M:'Master or coordinated tooling required',N:'Special test or inspection facilities required',O:'Never screened',P:'Data held but no rights to use it',Q:'Data or rights lacking, breakout in progress',R:'Data and rights never bought',S:'Militarily sensitive: approved sources only',T:'Qualified Products List (QPL)',U:'Breakout costs more than it saves',V:'High-reliability safety item',Y:'Design unstable, changes expected'};
+// Can a reseller (buys from the maker, sells to DLA) quote it?  yes / part (only the exact approved part, with traceability) / no
+const AMSC_HELP={
+ Z:['yes','Commercial, nondevelopmental or off-the-shelf. Described by commercial catalogs, price lists or manuals. The easiest reseller buys: quote the listed manufacturer part, with traceability.'],
+ G:['yes','The government has the full data package and the rights, with no technical restrictions. The only code meaning full and open competition. Anyone who can supply a part built to the drawing/spec can quote (get the drawings from cFolders).'],
+ '':['yes','No suffix code on the RFQ. Read the RFQ: if it lists approved sources, offer one of those parts; if not, any compliant part.'],
+ L:['yes','Annual buy value is below the screening threshold, but the part was screened. Usually you offer one of the listed approved parts.'],
+ A:['part','The government\'s right to use its data is in question. Offer the exact approved part (listed CAGE and part number) with traceability.'],
+ B:['part','Must come from the sources named on a source-control or selected-item drawing. As a reseller, buy that exact part from a listed source and keep traceability.'],
+ C:['part','Engineering source approval is required to maintain quality. Approved sources are listed; anyone else must get qualified first. Reselling the exact approved part is allowed with traceability.'],
+ D:['part','The data needed to compete isn\'t available and a spec can\'t be written. Only the listed approved parts are acceptable.'],
+ H:['part','The government lacks enough accurate data to buy from anyone but the current source(s). Offer the current source\'s exact part.'],
+ K:['part','Must be made from Class 1 castings and similar forgings (MIL-STD-2175). Only sources with those castings; resell the approved part.'],
+ M:['part','Needs master or coordinated tooling. Only sources with the tooling; resell the approved part.'],
+ N:['part','Needs special test or inspection facilities for ultra-precision quality. Resell the approved part only.'],
+ O:['part','Never assigned a code or screened. Treat it as approved-source: offer the listed part.'],
+ P:['part','The government has the data but not the rights to use it. Only the listed approved parts.'],
+ Q:['part','The government lacks adequate data or rights; breakout is in progress. Only the listed approved parts for now.'],
+ R:['part','The government never bought the data or rights. Only the listed approved parts.'],
+ S:['part','Militarily sensitive technology: government-approved sources only. Offer the exact approved part; if the drawings are export-controlled, you also need a JCP (Joint Certification Program) certification to get them.'],
+ T:['part','Qualified Products List: only products on the QPL. Resell a QPL-listed manufacturer\'s part.'],
+ U:['part','Breaking the part out to competition would cost more than it saves. Only the listed approved parts.'],
+ V:['part','High-reliability safety item where failure is unacceptable. Only the exact approved part, with full traceability.'],
+ Y:['part','The design is unstable and major changes are expected. Limited buys from the present source; offer its exact part.'],
+};
+const ELIG={yes:['t-ok','You can bid'],part:['t-warn','Approved part only'],no:['t-acc','Not for resellers']};
+function resell(r){const c=r[10]||'',h=AMSC_HELP[c];if(!h)return (r[15]||[]).length?'part':'no';if(h[0]==='part'&&!(r[15]||[]).length)return 'no';return h[0]}
+const SA_HELP={N:['Unrestricted','Open to any business, large or small.'],Y:['Small Business set-aside','Only small businesses (by the NAICS size standard) can be awarded. You can bid if your SAM registration says small business.'],H:['HUBZone set-aside','Only SBA-certified HUBZone businesses.'],R:['SDVOSB set-aside','Only Service-Disabled Veteran-Owned Small Businesses.'],L:['WOSB set-aside','Only Women-Owned Small Businesses certified with SBA.'],E:['EDWOSB set-aside','Only Economically Disadvantaged Women-Owned Small Businesses.'],A:['8(a) set-aside','Only firms in the SBA 8(a) Business Development program.']};
+const TYPE_HELP={F:['Fast Auto Evaluation','Fast-track version of auto evaluation: DLA\'s system evaluates the quotes instead of a buyer.'],P:['Auto Evaluation','Quotes are evaluated automatically by DLA\'s system instead of by a buyer.'],I:['AIDC (Automated Indefinite Delivery Contract)','A longer-term contract with orders placed over time. Your quote must stay valid at least 90 days, or it becomes a bid with exception.'],M:['Buyer evaluated','No automated type: a DLA buyer reviews the quotes and makes the award.']};
+function codesGuide(focus){
+  const cnt={},sac={},tyc={};for(const r of D.rows){cnt[r[10]||'']=(cnt[r[10]||'']||0)+1;sac[r[9]||'N']=(sac[r[9]||'N']||0)+1;tyc[r[11]||'M']=(tyc[r[11]||'M']||0)+1}
+  const order=['Z','G','','L',...Object.keys(AMSC_HELP).filter(k=>!['Z','G','','L'].includes(k))];
+  modal(`<div class="bar"><strong>What the codes mean</strong><button class="btn" id="mX">✕</button></div>
+  <div class="small" style="margin:4px 0 10px">For a reseller (you buy from the manufacturer and sell to DLA). Counts are today's open RFQ lines.</div>
+  <h3 id="g-amsc" style="font-size:15px;margin:8px 0 4px">Tech data / sources (AMSC)</h3>
+  <div class="small" style="margin-bottom:6px"><span class="tag t-ok">You can bid</span> open to resellers. <span class="tag t-warn">Approved part only</span> quote only the exact approved CAGE + part number, bought from that maker or its authorized distributor, with traceability (CoC, distributor invoice). Offering anything else needs a source approval request. If an "approved part only" RFQ lists no approved sources, it isn't practical for a reseller.</div>
+  <table class="aw"><thead><tr><th>Code</th><th>Meaning</th><th>Reseller?</th><th>Open</th></tr></thead><tbody>
+  ${order.map(k=>{const h=AMSC_HELP[k];return`<tr><td><b>${k||'blank'}</b></td><td>${k?`<b>${esc(AMSC[k]||'')}</b><br>`:''}<span class="small">${esc(h[1])}</span></td><td><span class="tag ${ELIG[h[0]][0]}">${ELIG[h[0]][1]}</span></td><td style="white-space:nowrap;text-align:right">${(cnt[k]||0).toLocaleString()}</td></tr>`}).join('')}
+  </tbody></table>
+  <h3 id="g-sa" style="font-size:15px;margin:16px 0 4px">Set-aside</h3>
+  <table class="aw"><tbody>${Object.entries(SA_HELP).map(([k,[n,d]])=>`<tr><td><b>${esc(n)}</b><br><span class="small">${esc(d)}</span></td><td style="white-space:nowrap;text-align:right">${(sac[k]||0).toLocaleString()}</td></tr>`).join('')}</tbody></table>
+  <h3 id="g-type" style="font-size:15px;margin:16px 0 4px">RFQ type</h3><div class="small" style="margin-bottom:6px">How DLA evaluates the quotes. It doesn't limit who can bid: all four types are open to resellers. Whether you can bid comes from the AMSC and the set-aside.</div>
+  <table class="aw"><tbody>${Object.entries(TYPE_HELP).map(([k,[n,d]])=>`<tr><td><b>${esc(n)}</b><br><span class="small">${esc(d)}</span></td><td style="white-space:nowrap;text-align:right">${(tyc[k]||0).toLocaleString()}</td></tr>`).join('')}</tbody></table>
+  <div class="small" style="margin-top:10px">AMSC meanings: DFARS PGI 217.75 (Acquisition Method Suffix Codes). Set-aside and RFQ type codes: DIBBS batch quote format. Always confirm the requirements in the RFQ itself.</div>`);
+  $('#modalBox').classList.add('wide');$('#mX').onclick=closeModal;
+  if(focus){const el=document.getElementById('g-'+focus);if(el)el.scrollIntoView({block:'start'})}
+}
 const STAT=['Watching','Sourcing','Quote requests sent','Ready to bid','Bid','Won','Lost','Pass'];
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -498,6 +545,7 @@ async function adminModal(msg){
   document.querySelectorAll('#modalBox .wDel').forEach(b=>b.onclick=async()=>{const tr=b.closest('tr');if(!confirm(`Delete ${tr.dataset.n} and all its data? Export it first if you might need it.`))return;done(await api('DELETE','admin/workspace?id='+encodeURIComponent(tr.dataset.w)),'Deleted.')});
 }
 $('#admBtn').onclick=()=>adminModal();
+document.addEventListener('click',e=>{const a=e.target.closest('.cgLink');if(!a)return;e.preventDefault();e.stopPropagation();codesGuide(a.dataset.g)},true);
 function crmSave(){CRM.pipeline=pipe;store.set('bp_crm',CRM);scheduleSync()}
 function delPipe(k){delete pipe[k];CRM.deleted['p:'+k]=nowIso();crmSave()}
 // Viewed RFQs: keyed by solicitation + PR, value {saved}. Only open RFQs are kept.
@@ -613,6 +661,8 @@ function filt(skipFsc){
     if(saSet.size && !saSet.has(r[9]))return false;
     if(am&&am.length===1&&r[10]!==am)return false;
     if(am==='open'&&!openAmsc(r[10]))return false;
+    if(am==='resell'&&resell(r)==='no')return false;
+    if(am==='resellopen'&&resell(r)!=='yes')return false;
     if(am==='restricted'&&openAmsc(r[10]))return false;
     if(ty && (r[11]||'M')!==ty)return false;
     const dl=daysLeft(r[8]);
@@ -642,8 +692,8 @@ function renderTable(){
   $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]),sn=seen(r);return `<tr data-i="${page*PER+i}" class="${sn?'seen':'new'}" title="${sn?'Opened '+esc(new Date(CRM.viewed[vkey(r)].saved).toLocaleDateString()):'Not opened yet'}">
     <td><input type="checkbox" class="dsel" data-i="${page*PER+i}" ${DSEL.has(key(r))?'checked':''} style="width:auto"></td><td>${sn?'':'<span class="dot"></span>'}${r[8]||''} ${r[17]?`<span class="tag t-warn" title="Return-by date passed, but DIBBS showed it Open on ${r[17]}. DLA may still take quotes.">past due · open</span>`:`<span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span>`}</td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
     <td class="nom">${esc(r[4])}${curView==='sugg'&&SUG.has(key(r))?`<br><span class="small" title="Suggestion score ${SUG.get(key(r)).sc}">${SUG.get(key(r)).why.map(esc).join(' · ')}</span>`:''}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
-    <td>${SA[r[9]]||r[9]}</td><td>${r[10]?`<span class="tag ${openAmsc(r[10])?'t-ok':'t-warn'}" title="${esc(AMSC[r[10]]||'')}">${r[10]}</span>`:''}</td>
-    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=lastAw(r);if(!m)return histRead(r)?'<span class="small">never</span>':'';const yrs=-daysLeft(m.date)/365;return `${m.unit>0?'$'+(+m.unit).toFixed(2):''}<br><span class="small ${yrs>=2?'':''}" title="Last procured ${esc(m.date)} by CAGE ${esc(m.cage)}">${esc(m.date.slice(0,7))}${yrs>=2?' · '+Math.floor(yrs)+'y':''}</span>${m.same?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td>${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="15" class="small">${noMatchMsg()}</td></tr>`;
+    <td>${SA[r[9]]||r[9]}</td><td>${(()=>{const e=resell(r),h=AMSC_HELP[r[10]||''];return`<span class="tag ${ELIG[e][0]}" title="${esc((r[10]?r[10]+': '+(AMSC[r[10]]||'')+'. ':'No AMSC. ')+ELIG[e][1]+'. '+(h?h[1]:''))}">${r[10]||'–'}</span>`})()}</td>
+    <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=lastAw(r);if(!m)return histRead(r)?'<span class="small">never</span>':'';const yrs=-daysLeft(m.date)/365;return `${m.unit>0?'$'+(+m.unit).toFixed(2):''}<br><span class="small ${yrs>=2?'':''}" title="Last procured ${esc(m.date)} by CAGE ${esc(m.cage)}">${esc(m.date.slice(0,7))}${yrs>=2?' · '+Math.floor(yrs)+'y':''}</span>${m.same?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td title="${esc((TYPE_HELP[r[11]||'M']||[])[1]||'')}">${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="15" class="small">${noMatchMsg()}</td></tr>`;
   const pages=Math.max(1,Math.ceil(filtered.length/PER));$('#pg').textContent=`Page ${page+1} of ${pages}`;
 }
 function noMatchMsg(){
@@ -702,8 +752,8 @@ function openDrawer(r){
     <div>Return by</div><div>${r[8]} ${r[17]?`<span class="tag t-warn">past due</span> <span class="small">DIBBS showed it Open on ${r[17]}. DLA may still take or ask for updated quotes. Confirm on the solicitation page.</span>`:`(${daysLeft(r[8])} days)`}</div>
     <div>Posted</div><div>${r[7]||''}</div>
     <div>Set-aside</div><div>${SA[r[9]]||r[9]}</div>
-    <div>AMSC</div><div>${r[10]?`${r[10]}: ${esc(AMSC[r[10]]||'')}`:'—'}</div>
-    <div>RFQ type</div><div>${TYPE[r[11]]||'—'}</div>
+    <div>AMSC</div><div>${r[10]?`${r[10]}: ${esc(AMSC[r[10]]||'')}`:'—'} <span class="tag ${ELIG[resell(r)][0]}">${ELIG[resell(r)][1]}</span><br><span class="small">${esc((AMSC_HELP[r[10]||'']||['',(r[15]||[]).length?'Offer one of the listed approved parts.':'Restricted, with no approved source listed.'])[1])}</span> <a href="#" class="cgLink" data-g="amsc">ⓘ all codes</a></div>
+    <div>RFQ type</div><div>${TYPE[r[11]]||'—'}${TYPE_HELP[r[11]||'M']?`<br><span class="small">${esc(TYPE_HELP[r[11]||'M'][1])}</span>`:''}</div>
     <div>FOB</div><div>${r[12]==='O'?'Origin':r[12]==='D'?'Destination':'—'}</div>
     <div>Inspection point</div><div>${r[16]==='O'?'Origin':r[16]==='D'?'Destination':'—'}</div>
     <div>Acceptance point</div><div>${r[16]==='O'?'Origin':r[16]==='D'?'Destination':'—'} <span class="small">(confirm in RFQ PDF)</span></div>
