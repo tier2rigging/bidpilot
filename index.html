@@ -576,11 +576,11 @@ $('#fscIn').addEventListener('change',e=>{
   else{const hit=v&&Object.entries(FSC).find(([c,n])=>n.toLowerCase().includes(v.toLowerCase()));if(hit){fscSel.add(hit[0]);chips();page=0;run()}}
   e.target.value='';
 });
-function loadMyFsc(){fscSel=new Set(CFG.myfsc||[]);chips()}
+function loadMyFsc(){if(!(CFG.myfsc||[]).length){const old=store.get('t2_myfsc',[])||[];if(old.length)CFG.myfsc=old}fscSel=new Set(CFG.myfsc||[]);chips()}
 $('#saveMine').onclick=async()=>{CFG.myfsc=[...fscSel];store.set('t2_myfsc',CFG.myfsc);CFG.settingsSaved=nowIso();CRM.settings=pickSettings();store.set('bp_cfg',CFG);store.set('bp_crm',CRM);
   const b=$('#saveMine');b.textContent='Saving…';try{if(SERVER)await saveServerSettings();else scheduleSync()}catch{}
   b.textContent=`Saved ✓ (${CFG.myfsc.length})`;setTimeout(()=>b.textContent='Save as My FSCs',2500)};
-$('#loadMine').onclick=()=>{loadMyFsc();run()};
+$('#loadMine').onclick=()=>{loadMyFsc();page=0;run();const b=$('#loadMine'),n=fscSel.size;b.textContent=n?`Loaded ✓ (${n})`:'Nothing saved yet';setTimeout(()=>b.textContent='Load My FSCs',2500)};
 
 // Set-aside checkboxes
 $('#saBox').innerHTML=Object.entries(SA).map(([c,n])=>`<label><input type="checkbox" value="${c}">${n}</label>`).join('');
@@ -602,7 +602,7 @@ $('#vtabs').onclick=e=>{
   if(e.target.closest('#vSave')){const name=prompt('Name this view (e.g. "My FSCs · small business · closing 7 days")');if(!name)return;const id='w'+Date.now().toString(36);CRM.views[id]={name:name.trim(),f:captureView(),order:Date.now(),saved:nowIso()};crmSave();curView=id;renderViews();return}
   if(e.target.closest('#vUpd')){const v=CRM.views[curView];if(v){v.f=captureView();v.saved=nowIso();crmSave();renderViews()}return}
   const t=e.target.closest('[data-v]');if(!t)return;curView=t.dataset.v;
-  if(curView==='sugg'){$('#reset').click();curView='sugg';loadPastDue();sugRefresh();renderViews();run();return}
+  if(curView==='sugg'){const keep=[...fscSel];$('#reset').click();curView='sugg';fscSel=new Set(keep.length?keep:(CFG.myfsc||[]));chips();loadPastDue();sugRefresh();renderViews();run();return}
   if(curView===''){$('#reset').click();loadMyFsc();run()}else applyView(CRM.views[curView].f);renderViews();
 };
 // ---------- Find FSCs: match a plain-English description against FSC names and open RFQ item names ----------
