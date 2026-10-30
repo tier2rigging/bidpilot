@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("6508",[["SPE2DP27P0188 &raquo; Award/Basic Package View","","","","0AG09",236,"2026-10-29","2026-10-29","6508016681197","LIPSTICK, ANTICHAP","7018646408","","https://dibbs2.bsm.dla.mil/Downloads/Awards/29OCT26/SPE2DP27P0188.PDF",null,"",null,null]]);

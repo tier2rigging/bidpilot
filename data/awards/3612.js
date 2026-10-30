@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("3612",[["SPE8EN27P0108 &raquo; Award/Basic Package View","","","","4LF36",17420,"2026-10-29","2026-10-29","3612016959151","PRINTER, THREE-DIMENSIONAL","7018729827","SPE8EN27T0171","https://dibbs2.bsm.dla.mil/Downloads/Awards/29OCT26/SPE8EN27P0108.PDF",null,"",null,null]]);

@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("3810",[["SPE8EE27V0112 &raquo; Award/Basic Package View","","","","7Z016",7568.46,"2026-10-29","2026-10-29","3810999941741","CONTROL, REMOTE","7018838103","SPE8EE27T0227","https://dibbs2.bsm.dla.mil/Downloads/Awards/29OCT26/SPE8EE27V0112.PDF",null,"",-1,""]]);
