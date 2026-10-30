@@ -168,10 +168,10 @@ tbody tr:hover td{background:var(--hov)!important}
       <textarea id="nsnList" rows="2" placeholder="Paste NSNs or part numbers, one per line or comma-separated"></textarea>
       <div class="small" id="nsnListN"></div>
       <label>Find FSCs for what you sell</label>
-      <div style="display:flex;gap:6px"><input id="fFind" placeholder="e.g. cargo slings, webbing, tie-down straps"><button class="btn p" id="fFindGo">Find</button></div>
+      <div style="display:flex;gap:6px"><input id="fFind" placeholder="e.g. cargo slings, webbing, 1670, 3940"><button class="btn p" id="fFindGo">Find</button></div>
       <div id="fFindOut"></div>
       <label>Add FSC (any of all 666)</label>
-      <input id="fscIn" list="fscOpts" placeholder="Type code or name, e.g. 1670 or parachute">
+      <input id="fscIn" list="fscOpts" placeholder="Codes or name, e.g. 1670, 3940, 5340">
       <datalist id="fscOpts"></datalist>
       <div class="chips" id="fscChips"></div>
       <div style="display:flex;gap:6px;margin-top:8px">
@@ -571,9 +571,10 @@ $('#fsg').innerHTML+=Object.entries(FSG).map(([c,n])=>`<option value="${c}">${c}
 function chips(){ $('#fscChips').innerHTML=[...fscSel].map(c=>`<span class="chip" data-c="${c}" title="Remove">${c} ${esc((FSC[c]||'').slice(0,22))} ×</span>`).join(''); store.set('t2_fscSel',[...fscSel]); }
 $('#fscChips').onclick=e=>{const c=e.target.dataset.c;if(c){fscSel.delete(c);chips();run()}};
 $('#fscIn').addEventListener('change',e=>{
-  const v=e.target.value.trim(); let code=(v.match(/^\d{4}/)||[])[0];
-  if(!code){const hit=Object.entries(FSC).find(([c,n])=>n.toLowerCase().includes(v.toLowerCase()));code=hit&&hit[0]}
-  if(code){fscSel.add(code);chips();run()} e.target.value='';
+  const v=e.target.value.trim(); const codes=(v.match(/\b\d{4}\b/g)||[]).filter(c=>FSC[c]);
+  if(codes.length){codes.forEach(c=>fscSel.add(c));chips();page=0;run()}
+  else{const hit=v&&Object.entries(FSC).find(([c,n])=>n.toLowerCase().includes(v.toLowerCase()));if(hit){fscSel.add(hit[0]);chips();page=0;run()}}
+  e.target.value='';
 });
 function loadMyFsc(){fscSel=new Set(CFG.myfsc||[]);chips()}
 $('#saveMine').onclick=async()=>{CFG.myfsc=[...fscSel];store.set('t2_myfsc',CFG.myfsc);CFG.settingsSaved=nowIso();CRM.settings=pickSettings();store.set('bp_cfg',CFG);store.set('bp_crm',CRM);
@@ -622,10 +623,12 @@ function findFsc(text){
   return Object.entries(sc).map(([f,o])=>({f,score:o.name*5+Math.log2(1+o.item)*4,n:o.n,ex:[...o.ex]})).sort((a,b)=>b.score-a.score).slice(0,20);
 }
 function runFind(){
-  const res=findFsc($('#fFind').value),out=$('#fFindOut');
+  const txt=$('#fFind').value,codes=[...new Set((txt.match(/\b\d{4}\b/g)||[]).filter(c=>FSC[c]))];
+  const words=txt.replace(/\b\d{4}\b/g,' ');
+  const res=[...codes.map(f=>({f,score:1e9,n:0,ex:[],code:true})),...findFsc(words).filter(x=>!codes.includes(x.f))],out=$('#fFindOut');
   if(!res.length){out.innerHTML='<div class="small" style="margin-top:6px">No matches. Try other words, like the item names on RFQs you\'ve bid.</div>';return}
   const cnt={};for(const r of D.rows)if(r[3])cnt[r[3]]=(cnt[r[3]]||0)+1;
-  out.innerHTML=`<div class="fres">${res.map(x=>`<label><input type="checkbox" value="${x.f}" ${fscSel.has(x.f)?'checked disabled':''}><span><b>${x.f}</b> ${esc(FSC[x.f]||'')} <span class="small">· ${cnt[x.f]||0} open RFQs${x.n?`, ${x.n} matching`:''}</span>${x.ex.length?`<br><span class="ex">e.g. ${x.ex.map(esc).join(' · ')}</span>`:''}</span></label>`).join('')}</div>
+  out.innerHTML=`<div class="fres">${res.map(x=>`<label><input type="checkbox" value="${x.f}" ${fscSel.has(x.f)?'checked disabled':x.code?'checked':''}><span><b>${x.f}</b> ${esc(FSC[x.f]||'')} <span class="small">· ${cnt[x.f]||0} open RFQs${x.n?`, ${x.n} matching`:''}</span>${x.ex.length?`<br><span class="ex">e.g. ${x.ex.map(esc).join(' · ')}</span>`:''}</span></label>`).join('')}</div>
   <div style="display:flex;gap:6px;margin-top:6px"><button class="btn p" id="fAdd">Add selected FSCs</button><button class="btn" id="fClr">Close</button></div>`;
   $('#fAdd').onclick=()=>{out.querySelectorAll('input:checked:not(:disabled)').forEach(i=>fscSel.add(i.value));chips();page=0;run();out.innerHTML=''};
   $('#fClr').onclick=()=>out.innerHTML='';
