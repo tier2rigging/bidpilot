@@ -1,1 +1,1 @@
-window.AW_LOAD&&AW_LOAD("1265",[["SPE7M127V1017 &raquo; Award/Basic Package View","","","","17399",63408,"2026-10-29","2026-10-29","1265010694569","BRUSH BLOCK ASSEMBL","7018663305","SPE7M127T0280","https://dibbs2.bsm.dla.mil/Downloads/Awards/29OCT26/SPE7M127V1017.PDF",null,"",null,null]]);
+window.AW_LOAD&&AW_LOAD("1265",[["SPE7M127V1017 &raquo; Award/Basic Package View","","","","17399",63408,"2026-10-29","2026-10-29","1265010694569","BRUSH BLOCK ASSEMBL","7018663305","SPE7M127T0280","https://dibbs2.bsm.dla.mil/Downloads/Awards/29OCT26/SPE7M127V1017.PDF",null,"",-1,""]]);
