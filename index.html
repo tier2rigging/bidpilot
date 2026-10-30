@@ -394,11 +394,12 @@ const openAmsc=a=>!a||a==='G'||a==='Z';
 // ---------- CRM data + GitHub sync ----------
 const CFG=Object.assign({repo:'',token:'',sig:'Tier2 Rigging LLC\nCAGE: 175A8\nManorville, NY\n516-902-8843\ntier2rigging.com',mtarget:20,qp:{cage:'175A8',sb:'',aac:'',pccr:'',adr:'',pkg:'',haz:'',mat:'',disc:'1',mfg:'DD',quality:'',fobCity:'Manorville',fobState:'NY',fobCountry:'US'}},store.get('bp_cfg',{}));
 CFG.qp=Object.assign({cage:'175A8',disc:'1',mfg:'DD',fobCity:'Manorville',fobState:'NY',fobCountry:'US'},CFG.qp||{});
+if(!Array.isArray(CFG.myfsc))CFG.myfsc=store.get('t2_myfsc',[])||[];
 let CRM=store.get('bp_crm',null)||{pipeline:store.get('t2_pipe',{}),suppliers:{},deleted:{}};
 CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.orders=CRM.orders||{};CRM.viewed=CRM.viewed||{};CRM.views=CRM.views||{};CRM.deleted=CRM.deleted||{};
-const pickSettings=()=>({saved:CFG.settingsSaved||'',sig:CFG.sig,tpl:CFG.tpl,mtarget:CFG.mtarget,qp:{...CFG.qp}});
+const pickSettings=()=>({saved:CFG.settingsSaved||'',sig:CFG.sig,tpl:CFG.tpl,mtarget:CFG.mtarget,qp:{...CFG.qp},myfsc:[...(CFG.myfsc||[])]});
 if(!CRM.settings)CRM.settings=pickSettings();
-function applySettings(){const st=CRM.settings;if(!st||!st.saved||(st.saved<=(CFG.settingsSaved||'')))return;if(st.sig!=null)CFG.sig=st.sig;if(st.tpl)CFG.tpl=st.tpl;if(st.mtarget)CFG.mtarget=st.mtarget;if(st.qp)CFG.qp=Object.assign({},CFG.qp,st.qp);CFG.settingsSaved=st.saved;store.set('bp_cfg',CFG)}
+function applySettings(){const st=CRM.settings;if(!st||!st.saved||(st.saved<=(CFG.settingsSaved||'')))return;if(st.sig!=null)CFG.sig=st.sig;if(st.tpl)CFG.tpl=st.tpl;if(st.mtarget)CFG.mtarget=st.mtarget;if(st.qp)CFG.qp=Object.assign({},CFG.qp,st.qp);if(Array.isArray(st.myfsc))try{const had=CFG.myfsc||[];CFG.myfsc=st.myfsc;if(typeof fscSel!=='undefined'&&(!fscSel.size||canon([...fscSel].sort())===canon([...had].sort()))){fscSel=new Set(CFG.myfsc);chips();run()}}catch{}CFG.settingsSaved=st.saved;store.set('bp_cfg',CFG)}
 let pipe=CRM.pipeline;
 const nowIso=()=>new Date().toISOString();
 function canon(o){return JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v)}
@@ -470,7 +471,7 @@ async function serverSync(){
   }catch(e){syncBadge('Sync error','err');$('#syncBadge').title=e.message}
   finally{syncing=false}
 }
-const SETTINGS_KEYS=['sig','mtarget','tpl'];   // personal; the company answers (CFG.qp) are shared by the workspace
+const SETTINGS_KEYS=['sig','mtarget','tpl','myfsc'];   // personal; the company answers (CFG.qp) are shared by the workspace
 let CAN_CO=false;
 async function saveServerSettings(){if(!SERVER)return;const d={};for(const k of SETTINGS_KEYS)if(CFG[k]!==undefined)d[k]=CFG[k];await api('PUT','settings',{data:d,...(CAN_CO?{company:{qp:CFG.qp}}:{})})}
 function blockScreen(title,msg){document.body.innerHTML=`<div style="max-width:520px;margin:12vh auto;padding:24px;font:15px/1.5 system-ui,sans-serif;text-align:center"><div style="font:800 26px system-ui;letter-spacing:.5px;color:#c8102e;margin-bottom:12px">BID<b>PILOT</b></div><h2 style="margin:0 0 8px">${esc(title)}</h2><p style="color:#555">${esc(msg)}</p><p style="color:#777;font-size:13px">Signed in through Cloudflare Access. To use a different account, close this browser window and sign in again.</p></div>`}
@@ -496,6 +497,7 @@ async function initServer(){
     CFG.qp=Object.assign({cage:'',disc:'1',mfg:'DD',fobCity:'',fobState:'',fobCountry:'US'},(st.ok&&st.json.company&&st.json.company.qp)||{});
   }else await saveServerSettings();
   delete CFG.repo;delete CFG.token;store.set('bp_cfg',CFG);
+  if(!fscSel.size&&(CFG.myfsc||[]).length){fscSel=new Set(CFG.myfsc);chips();run()}
   $('#wsBadge').style.display='';$('#wsBadge').textContent=SERVER.workspace.name;$('#wsBadge').title=`Signed in as ${SERVER.email}`;
   if(SERVER.admin)$('#admBtn').style.display='';
   return true;
@@ -557,7 +559,7 @@ function markSeen(r,on=true){const k=vkey(r);if(on){if(CRM.viewed[k])return;CRM.
 function pruneSeen(){const open=new Set(D.rows.map(vkey));for(const k of Object.keys(CRM.viewed))if(!open.has(k))delete CRM.viewed[k]}
 function refreshViews(){renderViews();pipeCount();renderTable();ordBadge();if(!$('#pipeView').classList.contains('hidden')){renderPipe();renderSup();renderOrd()}}
 
-let fscSel=new Set(store.get('t2_fscSel',[])), sortK=8, sortDir=1, page=0, PER=100, filtered=[];
+let fscSel=new Set(store.get('t2_fscSel',[]).length?store.get('t2_fscSel',[]):(CFG.myfsc||[])), sortK=8, sortDir=1, page=0, PER=100, filtered=[];
 
 // meta
 $('#meta').textContent=`${D.rows.length.toLocaleString()} open RFQ lines · updated ${D.updated?new Date(D.updated).toLocaleString():'—'}`;
@@ -573,8 +575,11 @@ $('#fscIn').addEventListener('change',e=>{
   if(!code){const hit=Object.entries(FSC).find(([c,n])=>n.toLowerCase().includes(v.toLowerCase()));code=hit&&hit[0]}
   if(code){fscSel.add(code);chips();run()} e.target.value='';
 });
-$('#saveMine').onclick=()=>{store.set('t2_myfsc',[...fscSel]);alert(`Saved ${fscSel.size} FSCs as My FSCs`)};
-$('#loadMine').onclick=()=>{fscSel=new Set(store.get('t2_myfsc',[]));chips();run()};
+function loadMyFsc(){fscSel=new Set(CFG.myfsc||[]);chips()}
+$('#saveMine').onclick=async()=>{CFG.myfsc=[...fscSel];store.set('t2_myfsc',CFG.myfsc);CFG.settingsSaved=nowIso();CRM.settings=pickSettings();store.set('bp_cfg',CFG);store.set('bp_crm',CRM);
+  const b=$('#saveMine');b.textContent='Saving…';try{if(SERVER)await saveServerSettings();else scheduleSync()}catch{}
+  b.textContent=`Saved ✓ (${CFG.myfsc.length})`;setTimeout(()=>b.textContent='Save as My FSCs',2500)};
+$('#loadMine').onclick=()=>{loadMyFsc();run()};
 
 // Set-aside checkboxes
 $('#saBox').innerHTML=Object.entries(SA).map(([c,n])=>`<label><input type="checkbox" value="${c}">${n}</label>`).join('');
@@ -597,7 +602,7 @@ $('#vtabs').onclick=e=>{
   if(e.target.closest('#vUpd')){const v=CRM.views[curView];if(v){v.f=captureView();v.saved=nowIso();crmSave();renderViews()}return}
   const t=e.target.closest('[data-v]');if(!t)return;curView=t.dataset.v;
   if(curView==='sugg'){$('#reset').click();curView='sugg';loadPastDue();sugRefresh();renderViews();run();return}
-  if(curView==='')$('#reset').click();else applyView(CRM.views[curView].f);renderViews();
+  if(curView===''){$('#reset').click();loadMyFsc();run()}else applyView(CRM.views[curView].f);renderViews();
 };
 // ---------- Find FSCs: match a plain-English description against FSC names and open RFQ item names ----------
 const SYN={sling:['rigging','hoist','lifting'],webbing:['strap','tape'],strap:['webbing','tiedown'],
