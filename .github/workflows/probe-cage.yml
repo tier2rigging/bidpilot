@@ -1,0 +1,32 @@
+name: Probe CAGE site (test only)
+on:
+  push:
+    branches: [cage-probe]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Can we look up CAGE detail IDs?
+        run: |
+          set +e
+          mkdir -p probe; O=probe/cage.txt; : > $O
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+          J=/tmp/jar
+          curl -sS -c $J -b $J -A "$UA" -L -o /tmp/a.html -w "first GET %{http_code} %{url_effective}\n" "https://cage.dla.mil/Search/Results?q=97499&page=1" >> $O
+          T=$(grep -o 'name="__RequestVerificationToken"[^>]*value="[^"]*"' /tmp/a.html | sed 's/.*value="//;s/"$//' | head -1)
+          R=$(grep -o 'name="returningURL"[^>]*value="[^"]*"' /tmp/a.html | sed 's/.*value="//;s/"$//' | head -1)
+          echo "token found: ${T:+yes} returningURL: $R" >> $O
+          curl -sS -c $J -b $J -A "$UA" -L -o /tmp/b.html -w "agree POST %{http_code} %{url_effective}\n" --data-urlencode "__RequestVerificationToken=$T" --data-urlencode "returningURL=$R" "https://cage.dla.mil/Home/UsageAgree" >> $O
+          grep -o 'Details?id=[0-9]*[^<]*<[^>]*>[^<]*' /tmp/b.html | head -5 >> $O
+          grep -o 'href="[^"]*Details[^"]*"' /tmp/b.html | head -5 >> $O
+          for c in 55799 1QNQ0 0JKF0; do curl -sS -c $J -b $J -A "$UA" -L -o /tmp/c.html -w "$c search %{http_code}\n" "https://cage.dla.mil/Search/Results?q=$c&page=1" >> $O; grep -o 'href="[^"]*Details?id=[0-9]*"' /tmp/c.html | head -3 >> $O; done
+          head -c 400 /tmp/b.html | tr -d '\r' >> $O
+          true
+      - name: Save report
+        if: always()
+        run: |
+          git config user.name bidpilot-bot; git config user.email actions@users.noreply.github.com
+          git add probe/ && git commit -qm "CAGE probe report" && git push -q origin HEAD:cage-probe
