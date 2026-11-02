@@ -1,0 +1,30 @@
+workers.dev subdomain: none
+{"success":true,"errors":[]}
+
+ ⛅️ wrangler 4.156.2
+────────────────────
+Total Upload: 1.08 KiB / gzip: 0.65 KiB
+Uploaded bidpilot-relay-test (1.14 sec)
+Deployed bidpilot-relay-test triggers (0.42 sec)
+  https://bidpilot-relay-test.tier2rigging.workers.dev
+Current Version ID: 8c4c1b86-8312-4aa0-a19d-c99c6f7050f3
+
+Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+
+ ⛅️ wrangler 4.156.2
+────────────────────
+🌀 Creating the secret for the Worker "bidpilot-relay-test"
+✨ Success! Uploaded secret RELAY_KEY
+== H-SERIES.zip
+http 000 bytes 0 time 0.066828s
+
+== IDENTIFICATION.zip
+http 000 bytes 0 time 0.027361s
+
+== CHARACTERISTICS.zip
+http 000 bytes 0 time 0.023863s
+
+
+ ⛅️ wrangler 4.156.2
+────────────────────
+Successfully deleted bidpilot-relay-test
