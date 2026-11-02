@@ -10,23 +10,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect PUB LOG DVD contents
+      - name: Inspect TAB format
         run: |
           set +e
-          mkdir -p probe; O=probe/flis3.txt; : > $O
+          mkdir -p probe; O=probe/flis4.txt; : > $O
           curl -sSL -o /tmp/dvd.zip https://publogstorage.blob.core.windows.net/publog/PublogDVD.zip
-          echo "== entries outside HTML5/GRAPHICS, by size" >> $O
-          unzip -l /tmp/dvd.zip | grep -vE " HTML5/| GRAPHICS/" | sort -k1 -n -r | head -60 >> $O
-          mkdir -p /tmp/x && cd /tmp/x
-          for m in $(unzip -Z1 /tmp/dvd.zip | grep -vE "^HTML5/|^GRAPHICS/|/$" | grep -iE "\.(zip|csv|txt|dat|imd|db|sqlite|mdb|idx)$" | head -40); do
-            echo "--- $m" >> $O; unzip -p /tmp/dvd.zip "$m" > /tmp/inner 2>/dev/null; file /tmp/inner | cut -c1-200 >> $O
-            if unzip -l /tmp/inner >/dev/null 2>&1; then unzip -l /tmp/inner | head -15 >> $O
-              for c in $(unzip -Z1 /tmp/inner | grep -iE "\.(csv|txt)$" | head -5); do echo "   -> $c" >> $O; unzip -p /tmp/inner "$c" | head -3 | cut -c1-400 >> $O; unzip -p /tmp/inner "$c" | grep -aE "011775465|016659391" | head -5 | cut -c1-400 >> $O; done
-            else head -c 300 /tmp/inner | strings | head -5 >> $O; grep -caE "011775465" /tmp/inner >> $O; fi
+          cd /tmp && unzip -q -o /tmp/dvd.zip V_H6_NAME_INC.TAB V_CHARACTERISTICS.TAB V_FLIS_IDENTIFICATION.TAB "CHANGES/NIIN.zip" README* "*.TXT" 2>/dev/null
+          for f in V_H6_NAME_INC.TAB V_FLIS_IDENTIFICATION.TAB V_CHARACTERISTICS.TAB; do
+            echo "===== $f $(stat -c %s $f)" >> $GITHUB_WORKSPACE/$O
+            file $f >> $GITHUB_WORKSPACE/$O
+            head -c 256 $f | xxd | head -16 >> $GITHUB_WORKSPACE/$O
+            echo "-- strings sample" >> $GITHUB_WORKSPACE/$O; strings -n 6 $f | head -25 | cut -c1-200 >> $GITHUB_WORKSPACE/$O
+            echo "-- grep test NIIN / name" >> $GITHUB_WORKSPACE/$O; grep -aob "011775465\|BAG,CLOTH\|BAG, CLOTH" $f | head -5 >> $GITHUB_WORKSPACE/$O
           done
+          echo "===== CHANGES/NIIN.zip" >> $GITHUB_WORKSPACE/$O; unzip -l CHANGES/NIIN.zip | head >> $GITHUB_WORKSPACE/$O
+          for c in $(unzip -Z1 CHANGES/NIIN.zip | head -3); do echo "-> $c" >> $GITHUB_WORKSPACE/$O; unzip -p CHANGES/NIIN.zip "$c" | head -c 600 | strings | head -8 >> $GITHUB_WORKSPACE/$O; done
+          ls /tmp/*.TXT /tmp/README* 2>/dev/null >> $GITHUB_WORKSPACE/$O
           true
       - name: Save report to this test branch
         if: always()
         run: |
           git config user.name bidpilot-bot; git config user.email actions@users.noreply.github.com
-          git add probe/ && git commit -qm "FLIS probe report 3" && git pull -q --rebase origin flis-probe && git push -q origin HEAD:flis-probe
+          git add probe/ && git commit -qm "FLIS probe report 4" && git pull -q --rebase origin flis-probe && git push -q origin HEAD:flis-probe
