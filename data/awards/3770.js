@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("3770",[["SPE8EE27V0119 &raquo; Award/Basic Package View","","","","6S313",4340.1,"2026-10-30","2026-10-30","3770015650576","CLIPPER KIT, ANIMAL","7018729122","SPE8EE27T0159","https://dibbs2.bsm.dla.mil/Downloads/Awards/30OCT26/SPE8EE27V0119.PDF",null,"",null,null]]);
