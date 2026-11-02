@@ -158,7 +158,7 @@ tbody tr:hover td{background:var(--hov)!important}
 <header>
   <div class="brand"><div><h1>BID<b>PILOT</b></h1><div class="tag">Government Contracting Intelligence</div></div></div>
   <span class="meta" id="meta"></span>
-  <span class="small" id="wsBadge" style="display:none"></span><button class="btn" id="admBtn" style="display:none" title="Users, workspaces and lock-outs">👤 Admin</button> <span class="sync" id="syncBadge" title="Sync settings">Local only</span><button class="btn" id="rdBtn" title="Pull the requirements out of an RFQ PDF">📄 Read RFQ</button> <button class="btn" id="cfgBtn" title="Settings">⚙ Settings</button>
+  <span class="small" id="wsBadge" style="display:none"></span><button class="btn" id="admBtn" style="display:none" title="Users, workspaces and lock-outs">👤 Admin</button> <span class="sync" id="syncBadge" title="Sync settings">Local only</span><button class="btn" id="watchBtn" title="Watchlist: NSNs you want to know about when they come up for bid">🔔 <span id="watchN"></span></button> <button class="btn" id="rdBtn" title="Pull the requirements out of an RFQ PDF">📄 Read RFQ</button> <button class="btn" id="cfgBtn" title="Settings">⚙ Settings</button>
   <nav><button id="tabFind" class="on" title="Find and filter solicitations">Discover</button><button id="tabPipe" title="Bids, suppliers, and orders">Manage <span id="pipeCount"></span></button></nav>
 </header>
 
@@ -223,7 +223,7 @@ tbody tr:hover td{background:var(--hov)!important}
   <section class="card">
     <div id="sampleBanner" class="banner hidden">Showing sample data (Oct 21 DIBBS day). Live data appears after the first daily update runs. Approved sources are only filled in on the few sample rows that match the Oct 25 batch file.</div>
     <div class="vtabs" id="vtabs"></div>
-    <div class="bar"><strong id="count"></strong><span><button class="btn p" id="addSel">Add selected to pipeline</button> <button class="btn" id="csv">Export CSV</button></span></div>
+    <div class="bar"><strong id="count"></strong><span><button class="btn p" id="addSel">Add selected to pipeline</button> <button class="btn" id="watchSel" title="Add the NSNs of the selected RFQs to your watchlist">🔔 Watch selected</button> <button class="btn" id="csv">Export CSV</button></span></div>
     <div class="tw"><table>
       <thead><tr>
         <th><input type="checkbox" id="dSelAll" style="width:auto" title="Select this page"></th><th data-k="8">Return by</th><th data-k="0">Solicitation</th><th data-k="1">NSN</th><th data-k="4">Item</th><th data-k="3">FSC</th><th data-k="5">Qty</th><th data-k="9">Set-aside</th><th data-k="10">AMSC <a href="#" class="cgLink" data-g="amsc" title="What these codes mean">ⓘ</a></th><th data-k="15">Sources</th><th data-k="16" title="Last procurement unit price and month (RFQ history + DIBBS awards)">Last buy</th><th data-k="12">FOB</th><th data-k="16" title="Inspection &amp; acceptance point">Insp./Accept.</th><th data-k="11">Type <a href="#" class="cgLink" data-g="type" title="What these codes mean">ⓘ</a></th><th>Status</th>
@@ -236,7 +236,7 @@ tbody tr:hover td{background:var(--hov)!important}
 
 <main id="pipeView" class="hidden" style="grid-template-columns:1fr">
   <section class="card">
-    <div class="subtabs"><button class="btn on" id="stPipe">Bid pipeline</button><button class="btn" id="stSup">Suppliers</button><button class="btn" id="stOrd">Orders <span id="ordBadge"></span></button></div>
+    <div class="subtabs"><button class="btn on" id="stPipe">Bid pipeline</button><button class="btn" id="stSup">Suppliers</button><button class="btn" id="stOrd">Orders <span id="ordBadge"></span></button><button class="btn" id="stWatch">🔔 Watchlist <span id="watchBadge"></span></button></div>
     <div id="pipePane">
     <div class="vtabs" id="pvtabs"></div>
     <div class="row2" style="grid-template-columns:2fr 1fr 1fr 1fr;margin-bottom:8px"><input id="pQ" placeholder="Search solicitation, NSN, item, supplier…"><select id="pSt"><option value="">All statuses</option></select><select id="pCl"><option value="">Any close date</option><option value="0">Closing today</option><option value="3">Within 3 days</option><option value="7">Within 7 days</option><option value="open">Still open</option></select><select id="pQt"><option value="">Any quotes</option><option value="none">No quotes yet</option><option value="waiting">Requested, waiting</option><option value="got">Has a priced quote</option></select></div>
@@ -253,6 +253,15 @@ tbody tr:hover td{background:var(--hov)!important}
     <div class="tw"><table>
       <thead><tr><th>Status</th><th>Due</th><th>Awarded</th><th>Contract / order</th><th>NSN</th><th>Item</th><th>Qty</th><th>$/ea</th><th>Total</th><th>Supplier</th><th>Supplier PO</th><th>Shipped</th></tr></thead>
       <tbody id="ob"></tbody>
+    </table></div>
+    </div>
+    <div id="watchPane" class="hidden">
+    <div class="bar"><strong>Watchlist</strong><span><button class="btn" id="wShowAll">Show open ones in Discover</button></span></div>
+    <div class="small" style="margin-bottom:8px">NSNs you want to know about. When DLA posts an RFQ for one (including past-due RFQs still open on DIBBS), BidPilot shows 🔔 in the header, tags the row, and lists it here. Shared with everyone in your workspace.</div>
+    <div class="row2" style="grid-template-columns:2fr 1fr auto;align-items:end;margin-bottom:10px"><div><label>NSNs to watch (paste one or many)</label><textarea id="wAdd" rows="2" placeholder="5340-01-665-9391, 4240011775465 …"></textarea></div><div><label>Note (optional)</label><input id="wNote" placeholder="e.g. won in 2025, Certex quote"></div><button class="btn p" id="wAddBtn">Add</button></div>
+    <div class="tw"><table>
+      <thead><tr><th>NSN</th><th>Item</th><th>Note</th><th>Open now</th><th>Last bought</th><th>Added</th><th></th></tr></thead>
+      <tbody id="wb"></tbody>
     </table></div>
     </div>
     <div id="supPane" class="hidden">
@@ -403,7 +412,7 @@ const CFG=Object.assign({repo:'',token:'',sig:'Tier2 Rigging LLC\nCAGE: 175A8\nM
 CFG.qp=Object.assign({cage:'175A8',disc:'1',mfg:'DD',fobCity:'Manorville',fobState:'NY',fobCountry:'US'},CFG.qp||{});
 if(!Array.isArray(CFG.myfsc))CFG.myfsc=store.get('t2_myfsc',[])||[];
 let CRM=store.get('bp_crm',null)||{pipeline:store.get('t2_pipe',{}),suppliers:{},deleted:{}};
-CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.orders=CRM.orders||{};CRM.viewed=CRM.viewed||{};CRM.views=CRM.views||{};CRM.deleted=CRM.deleted||{};
+CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.orders=CRM.orders||{};CRM.viewed=CRM.viewed||{};CRM.views=CRM.views||{};CRM.watch=CRM.watch||{};CRM.deleted=CRM.deleted||{};
 const pickSettings=()=>({saved:CFG.settingsSaved||'',sig:CFG.sig,tpl:CFG.tpl,mtarget:CFG.mtarget,qp:{...CFG.qp},myfsc:[...(CFG.myfsc||[])]});
 if(!CRM.settings)CRM.settings=pickSettings();
 function applySettings(){const st=CRM.settings;if(!st||!st.saved||(st.saved<=(CFG.settingsSaved||'')))return;if(st.sig!=null)CFG.sig=st.sig;if(st.tpl)CFG.tpl=st.tpl;if(st.mtarget)CFG.mtarget=st.mtarget;if(st.qp)CFG.qp=Object.assign({},CFG.qp,st.qp);if(Array.isArray(st.myfsc))try{const had=CFG.myfsc||[];CFG.myfsc=st.myfsc;if(typeof fscSel!=='undefined'&&(!fscSel.size||canon([...fscSel].sort())===canon([...had].sort()))){fscSel=new Set(CFG.myfsc);chips();run()}}catch{}CFG.settingsSaved=st.saved;store.set('bp_cfg',CFG)}
@@ -411,10 +420,10 @@ let pipe=CRM.pipeline;
 const nowIso=()=>new Date().toISOString();
 function canon(o){return JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v)}
 function mergeCRM(a,b){
-  const out={pipeline:{},suppliers:{},orders:{},viewed:{},views:{},deleted:{...(a.deleted||{})}};
+  const out={pipeline:{},suppliers:{},orders:{},viewed:{},views:{},watch:{},deleted:{...(a.deleted||{})}};
   for(const[k,t]of Object.entries(b.deleted||{}))if(!out.deleted[k]||t>out.deleted[k])out.deleted[k]=t;
-  for(const col of['pipeline','suppliers','orders','viewed','views']){
-    const A=a[col]||{},B=b[col]||{},pre={pipeline:'p:',orders:'o:',viewed:'v:',views:'w:'}[col]||'s:';
+  for(const col of['pipeline','suppliers','orders','viewed','views','watch']){
+    const A=a[col]||{},B=b[col]||{},pre={pipeline:'p:',orders:'o:',viewed:'v:',views:'w:',watch:'n:'}[col]||'s:';
     for(const id of new Set([...Object.keys(A),...Object.keys(B)])){
       const x=A[id],y=B[id];let w=!x?y:!y?x:((y.saved||'')>(x.saved||'')?y:x);
       if(col==='pipeline'&&x&&y&&w){const q={...(x.quotes||{})};for(const[s,v]of Object.entries(y.quotes||{}))if(!q[s]||(v.date||'')>(q[s].date||''))q[s]=v;w={...w,quotes:q}}
@@ -443,7 +452,7 @@ async function sync(){
       else if(g.status!==404)throw new Error(g.status===401?'bad token':g.status===404?'repo not found':'GitHub '+g.status);
       const merged=mergeCRM(remote,CRM);
       CRM=merged;pipe=CRM.pipeline;store.set('bp_crm',CRM);
-      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},orders:remote.orders||{},viewed:remote.viewed||{},views:remote.views||{},deleted:remote.deleted||{},settings:remote.settings||null}))break;
+      if(canon(merged)===canon({pipeline:remote.pipeline||{},suppliers:remote.suppliers||{},orders:remote.orders||{},viewed:remote.viewed||{},views:remote.views||{},watch:remote.watch||{},deleted:remote.deleted||{},settings:remote.settings||null}))break;
       const p=await gh('PUT',{message:'BidPilot CRM update',content:b64e(JSON.stringify(merged,null,1)),...(sha?{sha}:{})});
       if(p.status===409||p.status===422)continue;
       if(!p.ok)throw new Error(p.status===403||p.status===404?'token needs Contents read/write on this repo':'GitHub '+p.status);
@@ -458,7 +467,7 @@ async function sync(){
 // SERVER is null until /api/me answers; without the API (old setup, or opened as a file) BidPilot
 // keeps working the old way: this browser + optional GitHub sync.
 let SERVER=null, SRV_VER=0;
-const EMPTY_CRM=()=>({pipeline:{},suppliers:{},orders:{},viewed:{},views:{},deleted:{}});
+const EMPTY_CRM=()=>({pipeline:{},suppliers:{},orders:{},viewed:{},views:{},watch:{},deleted:{}});
 async function api(method,path,body){const r=await fetch('/api/'+path,{method,cache:'no-store',credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const ct=r.headers.get('content-type')||'';const j=ct.includes('json')?await r.json().catch(()=>({})):{};return{status:r.status,ok:r.ok,json:j,isApi:ct.includes('json')}}
 async function serverSync(){
   if(syncing){scheduleSync();return}
@@ -560,6 +569,65 @@ function copyText(txt){if(navigator.clipboard&&window.isSecureContext)return nav
 function fallbackCopy(txt){const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch{}ta.remove()}
 document.addEventListener('click',e=>{const a=e.target.closest('.cageLnk');if(!a)return;e.stopPropagation();const c=a.textContent.trim();copyText(c);toast(`<b>CAGE ${esc(c)} copied.</b> If the CAGE site shows its terms page, click <b>I Agree</b>, then paste it (<b>Ctrl+V</b>) into the CAGE search box.`)},true);
 document.addEventListener('click',e=>{const a=e.target.closest('.cgLink');if(!a)return;e.preventDefault();e.stopPropagation();codesGuide(a.dataset.g)},true);
+
+// ---------- watchlist: NSNs to be alerted about ----------
+const normNsn=x=>String(x||'').replace(/[^0-9]/g,'');
+const isWatched=n=>!!(CRM.watch&&CRM.watch[normNsn(n)]);
+function watchSet(nsn,on,note,name){nsn=normNsn(nsn);if(nsn.length!==13)return false;
+  if(on){const w=CRM.watch[nsn]||{nsn,added:nowIso(),ack:{}};if(note)w.note=note;if(name&&!w.name)w.name=name;
+    for(const r of D.rows)if(r[1]===nsn)w.ack[vkey(r)]=1;            // what's open right now isn't "new"
+    w.saved=nowIso();CRM.watch[nsn]=w;delete CRM.deleted['n:'+nsn]}
+  else{delete CRM.watch[nsn];CRM.deleted['n:'+nsn]=nowIso()}
+  crmSave();refreshWatch();return true}
+function watchHits(){const W=CRM.watch||{},out=[];for(const r of D.rows)if(W[r[1]])out.push(r);return out}
+function newHits(){const W=CRM.watch||{};return watchHits().filter(r=>!(W[r[1]].ack||{})[vkey(r)])}
+function ackWatch(r){const w=(CRM.watch||{})[r[1]];if(!w)return;w.ack=w.ack||{};if(w.ack[vkey(r)])return;w.ack[vkey(r)]=1;if(!w.name)w.name=r[4];w.saved=nowIso();crmSave();refreshWatch()}
+function ackAll(){for(const r of newHits()){const w=CRM.watch[r[1]];w.ack=w.ack||{};w.ack[vkey(r)]=1;if(!w.name)w.name=r[4];w.saved=nowIso()}crmSave();refreshWatch()}
+function refreshWatch(){const n=Object.keys(CRM.watch||{}).length,nh=newHits().length,open=watchHits().length;
+  $('#watchN').textContent=nh?nh:'';$('#watchBtn').classList.toggle('p',nh>0);
+  $('#watchBtn').title=n?`Watchlist: ${n} NSN${n>1?'s':''}, ${open} open RFQ line${open===1?'':'s'}${nh?`, ${nh} new`:''}`:'Watchlist: add NSNs to get an alert when they come up for bid';
+  $('#watchBadge').innerHTML=nh?`<span class="tag t-warn">${nh} new</span>`:'';
+  if(!$('#watchPane').classList.contains('hidden'))renderWatch()}
+function showInDiscover(nsns){$('#tabFind').click();$('#reset').click();if($('#pdF'))$('#pdF').value='all';$('#nsnList').value=nsns.map(fmtNsn).join('\n');page=0;run()}
+function watchModal(){
+  const nh=newHits(),hits=watchHits(),n=Object.keys(CRM.watch||{}).length;
+  const row=r=>`<tr><td>${fmtNsn(r[1])}</td><td class="nom">${esc(r[4])}</td><td>${esc(r[0])}${r[17]?' <span class="tag t-warn">past due · open</span>':''}</td><td>${esc(r[8]||'')}</td><td><button class="btn wOpen" data-k="${esc(key(r))}">Open</button></td></tr>`;
+  modal(`<div class="bar"><strong>🔔 Watchlist alerts</strong><button class="btn" id="mX">✕</button></div>
+  ${!n?'<div class="small" style="margin:6px 0">Your watchlist is empty. Add NSNs from any RFQ (🔔 Watch this NSN), from Discover (check rows, then 🔔 Watch selected), or paste a list under Manage → Watchlist.</div>':''}
+  ${nh.length?`<h3 style="font-size:15px;margin:8px 0 4px">New (${nh.length})</h3><table class="aw"><tbody>${nh.map(row).join('')}</tbody></table>`:n?'<div class="small" style="margin:6px 0">Nothing new since you last checked.</div>':''}
+  ${hits.length>nh.length?`<h3 style="font-size:15px;margin:14px 0 4px">Already seen, still open (${hits.length-nh.length})</h3><table class="aw"><tbody>${hits.filter(r=>!nh.includes(r)).map(row).join('')}</tbody></table>`:''}
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${nh.length?'<button class="btn p" id="wAck">Mark all as seen</button>':''}${hits.length?'<button class="btn" id="wDisc">Show in Discover</button>':''}<button class="btn" id="wMan">Manage watchlist (${n})</button></div>`);
+  $('#modalBox').classList.add('wide');$('#mX').onclick=closeModal;
+  document.querySelectorAll('#modalBox .wOpen').forEach(b=>b.onclick=()=>{const r=D.rows.find(x=>key(x)===b.dataset.k);closeModal();if(r){$('#tabFind').click();openDrawer(r)}});
+  if($('#wAck'))$('#wAck').onclick=()=>{ackAll();watchModal()};
+  if($('#wDisc'))$('#wDisc').onclick=()=>{closeModal();showInDiscover([...new Set(hits.map(r=>r[1]))])};
+  $('#wMan').onclick=()=>{closeModal();$('#tabPipe').click();subtab('stWatch')};
+}
+function renderWatch(){
+  const W=CRM.watch||{},byN={};for(const r of D.rows)if(W[r[1]])(byN[r[1]]=byN[r[1]]||[]).push(r);
+  const list=Object.values(W).sort((a,b)=>((byN[b.nsn]||[]).length-(byN[a.nsn]||[]).length)||(b.added||'').localeCompare(a.added||''));
+  $('#wb').innerHTML=list.map(w=>{const open=byN[w.nsn]||[],nw=open.filter(r=>!(w.ack||{})[vkey(r)]).length,la=lastAw(['',w.nsn]);
+    return `<tr data-n="${w.nsn}"><td>${fmtNsn(w.nsn)}</td><td class="nom">${esc(w.name||(open[0]||[])[4]||'')}</td>
+    <td><input class="wN" value="${esc(w.note||'')}" placeholder="add a note" style="min-width:160px"></td>
+    <td>${open.length?`<a href="#" class="wGo">${open.length} open</a>${nw?` <span class="tag t-warn">${nw} new</span>`:''}`:'<span class="small">not open</span>'}</td>
+    <td class="small">${la?`${la.unit>0?'$'+(+la.unit).toFixed(2)+' · ':''}${esc(la.date.slice(0,7))}`:''}</td>
+    <td class="small">${esc((w.added||'').slice(0,10))}</td><td><button class="btn wDel" title="Stop watching">Remove</button></td></tr>`}).join('')||'<tr><td colspan="7" class="small">No NSNs yet. Paste some above, or use 🔔 Watch this NSN on any RFQ.</td></tr>';
+}
+$('#wb').onclick=e=>{const tr=e.target.closest('tr[data-n]');if(!tr)return;const n=tr.dataset.n;
+  if(e.target.closest('.wGo')){e.preventDefault();showInDiscover([n]);return}
+  if(e.target.closest('.wDel')){if(confirm('Stop watching '+fmtNsn(n)+'?'))watchSet(n,false)}};
+$('#wb').addEventListener('change',e=>{if(!e.target.classList.contains('wN'))return;const n=e.target.closest('tr').dataset.n,w=CRM.watch[n];if(!w)return;w.note=e.target.value.trim();w.saved=nowIso();crmSave()});
+$('#wAddBtn').onclick=()=>{const toks=$('#wAdd').value.split(/[\s,;]+/).map(normNsn).filter(Boolean);const bad=toks.filter(t=>t.length!==13);let n=0;
+  for(const t of new Set(toks.filter(t=>t.length===13))){if(!isWatched(t))n++;watchSet(t,true,$('#wNote').value.trim(),(D.rows.find(r=>r[1]===t)||[])[4])}
+  $('#wAdd').value='';$('#wNote').value='';renderWatch();toast(`Added ${n} NSN${n===1?'':'s'} to the watchlist.${bad.length?` Skipped ${bad.length} that aren't 13-digit NSNs.`:''}`)};
+$('#wShowAll').onclick=()=>{const ns=Object.keys(CRM.watch||{});if(!ns.length)return toast('Your watchlist is empty.');showInDiscover(ns)};
+$('#watchBtn').onclick=watchModal;
+$('#stWatch').onclick=()=>subtab('stWatch');
+$('#watchSel').onclick=()=>{const byKey=new Map(D.rows.map(r=>[key(r),r]));let n=0;for(const k of DSEL){const r=byKey.get(k);if(r&&/^\d{13}$/.test(r[1])){if(!isWatched(r[1]))n++;watchSet(r[1],true,'',r[4])}}
+  toast(DSEL.size?`Watching ${n} new NSN${n===1?'':'s'}.`:'Check some rows first.');renderTable()};
+function watchStartup(){refreshWatch();const nh=newHits().length;if(nh)toast(`🔔 <b>${nh} RFQ${nh>1?'s':''} for NSNs on your watchlist</b> ${nh>1?'are':'is'} up for bid. <a href="#" id="tWatch" style="color:#fff;text-decoration:underline">See them</a>`);
+  const t=$('#tWatch');if(t)t.onclick=e=>{e.preventDefault();watchModal()};
+  if(Object.keys(CRM.watch||{}).length&&typeof loadPastDue==='function')loadPastDue()}   // past-due RFQs still open count too
 function crmSave(){CRM.pipeline=pipe;store.set('bp_crm',CRM);scheduleSync()}
 function delPipe(k){delete pipe[k];CRM.deleted['p:'+k]=nowIso();crmSave()}
 // Viewed RFQs: keyed by solicitation + PR, value {saved}. Only open RFQs are kept.
@@ -569,7 +637,7 @@ const seen=r=>!!CRM.viewed[vkey(r)];
 function markSeen(r,on=true){const k=vkey(r);if(on){if(CRM.viewed[k])return;CRM.viewed[k]={saved:nowIso()};delete CRM.deleted['v:'+k]}else{delete CRM.viewed[k];CRM.deleted['v:'+k]=nowIso()}
   CRM.pipeline=pipe;store.set('bp_crm',CRM);scheduleSync()}
 function pruneSeen(){const open=new Set(D.rows.map(vkey));for(const k of Object.keys(CRM.viewed))if(!open.has(k))delete CRM.viewed[k]}
-function refreshViews(){renderViews();pipeCount();renderTable();ordBadge();if(!$('#pipeView').classList.contains('hidden')){renderPipe();renderSup();renderOrd()}}
+function refreshViews(){refreshWatch();renderViews();pipeCount();renderTable();ordBadge();if(!$('#pipeView').classList.contains('hidden')){renderPipe();renderSup();renderOrd()}}
 
 let fscSel=new Set(store.get('t2_fscSel',[]).length?store.get('t2_fscSel',[]):(CFG.myfsc||[])), sortK=8, sortDir=1, page=0, PER=100, filtered=[];
 
@@ -694,7 +762,7 @@ function filt(skipFsc){
   });
 }
 let PD_STATE=0; // 0 not loaded, 1 loading, 2 loaded
-window.PASTDUE_LOAD=d=>{const have=new Set(D.rows.map(key));let n=0;for(const r of d.rows||[]){if(have.has(key(r)))continue;D.rows.push(r);n++}PD_STATE=2;PD_N=n;sugRefresh();renderViews();const o=$('#pdF option[value="pd"]');if(o)o.textContent=`Past due, still Open on DIBBS (${n.toLocaleString()})`;run()};
+window.PASTDUE_LOAD=d=>{const have=new Set(D.rows.map(key));let n=0;for(const r of d.rows||[]){if(have.has(key(r)))continue;D.rows.push(r);n++}PD_STATE=2;PD_N=n;refreshWatch();sugRefresh();renderViews();const o=$('#pdF option[value="pd"]');if(o)o.textContent=`Past due, still Open on DIBBS (${n.toLocaleString()})`;run()};
 let PD_N=0;
 function loadPastDue(){if(PD_STATE)return;PD_STATE=1;const s=document.createElement('script');s.src='data/pastdue.js?'+Date.now().toString(36).slice(0,-4);s.onerror=()=>{PD_STATE=2;const o=$('#pdF option[value="pd"]');if(o)o.textContent='Past due (not built yet: runs with the daily job)';run()};document.head.appendChild(s)}
 function run(){
@@ -710,7 +778,7 @@ function badge(r){const p=pipe[key(r)];return p?`<span class="tag t-acc">${p.sta
 function renderTable(){
   const rows=filtered.slice(page*PER,(page+1)*PER);
   $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]),sn=seen(r);return `<tr data-i="${page*PER+i}" class="${sn?'seen':'new'}${CUR_KEY===key(r)?' cur':''}" title="${sn?'Opened '+esc(new Date(CRM.viewed[vkey(r)].saved).toLocaleDateString()):'Not opened yet'}">
-    <td><input type="checkbox" class="dsel" data-i="${page*PER+i}" ${DSEL.has(key(r))?'checked':''} style="width:auto"></td><td>${sn?'':'<span class="dot"></span>'}${r[8]||''} ${r[17]?`<span class="tag t-warn" title="Return-by date passed, but DIBBS showed it Open on ${r[17]}. DLA may still take quotes.">past due · open</span>`:`<span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span>`}</td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
+    <td><input type="checkbox" class="dsel" data-i="${page*PER+i}" ${DSEL.has(key(r))?'checked':''} style="width:auto"></td><td>${sn?'':'<span class="dot"></span>'}${r[8]||''} ${r[17]?`<span class="tag t-warn" title="Return-by date passed, but DIBBS showed it Open on ${r[17]}. DLA may still take quotes.">past due · open</span>`:`<span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span>`}</td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}${isWatched(r[1])?' <span title="On your watchlist">🔔</span>':''}</td>
     <td class="nom">${esc(r[4])}${curView==='sugg'&&SUG.has(key(r))?`<br><span class="small" title="Suggestion score ${SUG.get(key(r)).sc}">${SUG.get(key(r)).why.map(esc).join(' · ')}</span>`:''}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
     <td>${SA[r[9]]||r[9]}</td><td>${(()=>{const e=resell(r),h=AMSC_HELP[r[10]||''];return`<span class="tag ${ELIG[e][0]}" title="${esc((r[10]?r[10]+': '+(AMSC[r[10]]||'')+'. ':'No AMSC. ')+ELIG[e][1]+'. '+(h?h[1]:''))}">${r[10]||'–'}</span>`})()}</td>
     <td>${(r[15]||[]).length===1?`<span class="tag t-warn">${cageA(r[15][0][0])}</span>`:(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}: open the RFQ to see each one">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=lastAw(r);if(!m)return histRead(r)?'<span class="small">never</span>':'';const yrs=-daysLeft(m.date)/365;return `${m.unit>0?'$'+(+m.unit).toFixed(2):''}<br><span class="small ${yrs>=2?'':''}" title="Last procured ${esc(m.date)} by CAGE ${esc(m.cage)}">${esc(m.date.slice(0,7))}${yrs>=2?' · '+Math.floor(yrs)+'y':''}</span>${m.same?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td title="${esc((TYPE_HELP[r[11]||'M']||[])[1]||'')}">${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="15" class="small">${noMatchMsg()}</td></tr>`;
@@ -790,7 +858,7 @@ function openDrawer(r){
     <a class="btn" target="_blank" rel="noopener" href="${DIBBS}/RA/Quote/QuoteFrm.aspx?sn=${r[0]}">Quote form</a>
   </div>
   <div class="kv" style="margin:10px 0">
-    <div>NSN</div><div>${fmtNsn(r[1])}</div>
+    <div>NSN</div><div>${fmtNsn(r[1])} ${/^\d{13}$/.test(r[1])?`<button class="btn" id="wTog" style="font-size:12px;padding:2px 8px" title="${isWatched(r[1])?'Stop watching this NSN':'Get an alert whenever this NSN comes up for bid'}">${isWatched(r[1])?'🔔 Watching ✓':'🔔 Watch this NSN'}</button>`:''}</div>
     <div>FSC</div><div>${r[3]} ${esc(FSC[r[3]]||'')}</div>
     <div>Qty</div><div>${r[5]??''} ${r[6]||''}</div>
     <div>Return by</div><div>${r[8]} ${r[17]?`<span class="tag t-warn">past due</span> <span class="small">DIBBS showed it Open on ${r[17]}. DLA may still take or ask for updated quotes. Confirm on the solicitation page.</span>`:`(${daysLeft(r[8])} days)`}</div>
@@ -851,7 +919,8 @@ function openDrawer(r){
   <div class="small">Last 2 years of DLA contract awards in this FSC from USAspending.gov. Shows who wins in this category and typical award sizes.</div>
   <div id="aw" class="small" style="margin-top:8px">Loading…</div>`;
   dr.classList.add('open');
-  markCur();
+  markCur();ackWatch(r);
+  if($('#wTog'))$('#wTog').onclick=()=>{watchSet(r[1],!isWatched(r[1]),'',r[4]);openDrawer(r)};
   $("#dclose").onclick=closeDrawer;
   $('#dunseen').onclick=()=>{markSeen(r,false);closeDrawer();renderTable()};
   const q=r[5]||1, $v=id=>$(id).value===''?null:+$(id).value;
@@ -1406,7 +1475,7 @@ function cfgForm(){
   $('#cExp').onclick=()=>{const b=new Blob([JSON.stringify(CRM,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`bidpilot-crm-${today}.json`;a.click()};
 }
 $('#rdBtn').onclick=()=>readerModal(null);$('#cfgBtn').onclick=cfgForm;$('#syncBadge').onclick=cfgForm;
-function subtab(which){for(const[t,pn]of[['stPipe','pipePane'],['stSup','supPane'],['stOrd','ordPane']]){$('#'+pn).classList.toggle('hidden',t!==which);$('#'+t).classList.toggle('on',t===which)}if(which==='stPipe')renderPipe();if(which==='stSup')renderSup();if(which==='stOrd')renderOrd()}
+function subtab(which){for(const[t,pn]of[['stPipe','pipePane'],['stSup','supPane'],['stOrd','ordPane'],['stWatch','watchPane']]){$('#'+pn).classList.toggle('hidden',t!==which);$('#'+t).classList.toggle('on',t===which)}if(which==='stPipe')renderPipe();if(which==='stSup')renderSup();if(which==='stOrd')renderOrd();if(which==='stWatch')renderWatch()}
 $('#stOrd').onclick=()=>subtab('stOrd');
 $('#stPipe').onclick=()=>subtab('stPipe');
 $('#stSup').onclick=()=>subtab('stSup');
@@ -1415,7 +1484,7 @@ $('#tabFind').onclick=()=>{$('#findView').classList.remove('hidden');$('#pipeVie
 $('#tabPipe').onclick=()=>{$('#pipeView').classList.remove('hidden');$('#findView').classList.add('hidden');$('#tabPipe').classList.add('on');$('#tabFind').classList.remove('on');renderPipe();renderSup();renderOrd()};
 
 pruneSeen(); sugRefresh(); renderViews(); chips(); pipeCount(); run(); syncBadge('Local only'); ordBadge();
-initServer().then(m=>{if(m==='blocked')return;if(m){pruneSeen();refreshViews();return sync().then(autoOutcomes)}return (CFG.repo&&CFG.token?sync():Promise.resolve()).then(autoOutcomes)});
+initServer().then(m=>{if(m==='blocked')return;if(m){pruneSeen();refreshViews();return sync().then(autoOutcomes).then(watchStartup)}return (CFG.repo&&CFG.token?sync():Promise.resolve()).then(autoOutcomes).then(watchStartup)});
 </script>
 </body>
 </html>
