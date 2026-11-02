@@ -1,0 +1,51 @@
+workers.dev subdomain: tier2rigging
+
+ ⛅️ wrangler 4.156.2
+────────────────────
+Total Upload: 1.08 KiB / gzip: 0.65 KiB
+Uploaded bidpilot-relay-test (0.84 sec)
+Deployed bidpilot-relay-test triggers (0.97 sec)
+  https://bidpilot-relay-test.tier2rigging.workers.dev
+Current Version ID: 56888175-3ee5-4f23-9aac-faf85b8b9d9e
+
+Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+
+ ⛅️ wrangler 4.156.2
+────────────────────
+🌀 Creating the secret for the Worker "bidpilot-relay-test"
+✨ Success! Uploaded secret RELAY_KEY
+reachable after ~70s (code 403)
+== H-SERIES.zip
+http 403 bytes 498 time 0.726874s
+x-upstream-length: 498
+x-upstream-modified: 
+<HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access "http&#58;&#47;&#47;www&#46;dla&#46;mil&#47;Portals&#47;104&#47;Documents&#47;InformationOperations&#47;LogisticsInformationServices&#47;FOIA&#47;PUBLOG&#47;H&#45;SERIES&#46;zip" on t
+== IDENTIFICATION.zip
+http 403 bytes 500 time 0.569563s
+x-upstream-length: 500
+x-upstream-modified: 
+<HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access "http&#58;&#47;&#47;www&#46;dla&#46;mil&#47;Portals&#47;104&#47;Documents&#47;InformationOperations&#47;LogisticsInformationServices&#47;FOIA&#47;PUBLOG&#47;IDENTIFICATION&#46;zip" on
+== CHARACTERISTICS.zip
+http 403 bytes 501 time 1.087551s
+x-upstream-length: 501
+x-upstream-modified: 
+<HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access "http&#58;&#47;&#47;www&#46;dla&#46;mil&#47;Portals&#47;104&#47;Documents&#47;InformationOperations&#47;LogisticsInformationServices&#47;FOIA&#47;PUBLOG&#47;CHARACTERISTICS&#46;zip" o
+
+ ⛅️ wrangler 4.156.2
+────────────────────
+Successfully deleted bidpilot-relay-test
