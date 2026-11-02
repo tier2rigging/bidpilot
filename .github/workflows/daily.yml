@@ -1,7 +1,8 @@
 name: Daily DIBBS update
 on:
   schedule:
-    - cron: "17 11,17 * * 1-5"   # weekdays ~7:17am and ~1:17pm Eastern (UTC 11:17 / 17:17)
+    - cron: "17 11,17 * * 1-5"   # weekdays, main runs (UTC 11:17 / 17:17 = 6:17am / 12:17pm EST, 7:17am / 1:17pm EDT)
+    - cron: "47 14,21 * * 1-5"   # weekdays, backup runs in case GitHub drops a scheduled run (UTC 14:47 / 21:47)
   workflow_dispatch:
     inputs:
       days:
