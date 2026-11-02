@@ -592,12 +592,18 @@ function showInDiscover(nsns){$('#tabFind').click();$('#reset').click();if($('#p
 function watchModal(){
   const nh=newHits(),hits=watchHits(),n=Object.keys(CRM.watch||{}).length;
   const row=r=>`<tr><td>${fmtNsn(r[1])}</td><td class="nom">${esc(r[4])}</td><td>${esc(r[0])}${r[17]?' <span class="tag t-warn">past due · open</span>':''}</td><td>${esc(r[8]||'')}</td><td><button class="btn wOpen" data-k="${esc(key(r))}">Open</button></td></tr>`;
-  modal(`<div class="bar"><strong>🔔 Watchlist alerts</strong><button class="btn" id="mX">✕</button></div>
+  modal(`<div class="bar"><strong>🔔 Watchlist</strong><button class="btn" id="mX">✕</button></div>
+  <div style="display:flex;gap:6px;margin:6px 0 10px"><input id="wqNsn" placeholder="Add NSN(s) to watch, e.g. 5340-01-665-9391" style="flex:1"><button class="btn p" id="wqAdd">Add</button></div>
   ${!n?'<div class="small" style="margin:6px 0">Your watchlist is empty. Add NSNs from any RFQ (🔔 Watch this NSN), from Discover (check rows, then 🔔 Watch selected), or paste a list under Manage → Watchlist.</div>':''}
   ${nh.length?`<h3 style="font-size:15px;margin:8px 0 4px">New (${nh.length})</h3><table class="aw"><tbody>${nh.map(row).join('')}</tbody></table>`:n?'<div class="small" style="margin:6px 0">Nothing new since you last checked.</div>':''}
   ${hits.length>nh.length?`<h3 style="font-size:15px;margin:14px 0 4px">Already seen, still open (${hits.length-nh.length})</h3><table class="aw"><tbody>${hits.filter(r=>!nh.includes(r)).map(row).join('')}</tbody></table>`:''}
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${nh.length?'<button class="btn p" id="wAck">Mark all as seen</button>':''}${hits.length?'<button class="btn" id="wDisc">Show in Discover</button>':''}<button class="btn" id="wMan">Manage watchlist (${n})</button></div>`);
   $('#modalBox').classList.add('wide');$('#mX').onclick=closeModal;
+  const qa=()=>{const toks=$('#wqNsn').value.split(/[\s,;]+/).map(normNsn).filter(Boolean),ok=[...new Set(toks.filter(t=>t.length===13))];
+    if(!ok.length){toast('Enter a 13-digit NSN, e.g. 5340-01-665-9391.');return}
+    let n=0;for(const t of ok){if(!isWatched(t))n++;watchSet(t,true,'',(D.rows.find(r=>r[1]===t)||[])[4])}
+    watchModal();toast(`Watching ${n} new NSN${n===1?'':'s'}.${toks.length>ok.length?' Skipped entries that aren\'t 13-digit NSNs.':''}`)};
+  $('#wqAdd').onclick=qa;$('#wqNsn').onkeydown=e=>{if(e.key==='Enter')qa()};$('#wqNsn').focus();
   document.querySelectorAll('#modalBox .wOpen').forEach(b=>b.onclick=()=>{const r=D.rows.find(x=>key(x)===b.dataset.k);closeModal();if(r){$('#tabFind').click();openDrawer(r)}});
   if($('#wAck'))$('#wAck').onclick=()=>{ackAll();watchModal()};
   if($('#wDisc'))$('#wDisc').onclick=()=>{closeModal();showInDiscover([...new Set(hits.map(r=>r[1]))])};
