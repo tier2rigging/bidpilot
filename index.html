@@ -58,6 +58,7 @@ td.nom{white-space:normal;min-width:160px}
 .verdict{border-radius:8px;padding:8px 10px;margin-top:8px;font-size:13px}.v-go{background:var(--okb);color:var(--ok)}.v-chk{background:var(--warnb);color:var(--warn)}.v-no{background:var(--acc2);color:var(--acc)}
 .sumgrid{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px;margin-top:8px}.sumgrid div:nth-child(odd){color:var(--mute)}
 .tag a.cageLnk{color:inherit;text-decoration:underline}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#1f2937;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;max-width:min(560px,92vw);box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:.2s;z-index:9999}#toast.show{opacity:1;transform:translateX(-50%)}
 #modalBox.wide{width:min(820px,100%);max-height:90vh;overflow:auto}
 #modalBox.wide table.aw{width:100%;table-layout:auto}#modalBox.wide table.aw td{white-space:normal;word-break:normal;overflow-wrap:break-word}
 #modalBox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(560px,100%)}
@@ -551,7 +552,11 @@ async function adminModal(msg){
   document.querySelectorAll('#modalBox .wDel').forEach(b=>b.onclick=async()=>{const tr=b.closest('tr');if(!confirm(`Delete ${tr.dataset.n} and all its data? Export it first if you might need it.`))return;done(await api('DELETE','admin/workspace?id='+encodeURIComponent(tr.dataset.w)),'Deleted.')});
 }
 $('#admBtn').onclick=()=>adminModal();
-document.addEventListener('click',e=>{if(e.target.closest('.cageLnk')){e.stopPropagation();return}},true);
+// Clicking a CAGE code also copies it, because cage.dla.mil's "I Agree" page drops the search.
+function toast(msg){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t)}t.innerHTML=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),6000)}
+function copyText(txt){if(navigator.clipboard&&window.isSecureContext)return navigator.clipboard.writeText(txt).catch(()=>fallbackCopy(txt));fallbackCopy(txt);return Promise.resolve()}
+function fallbackCopy(txt){const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch{}ta.remove()}
+document.addEventListener('click',e=>{const a=e.target.closest('.cageLnk');if(!a)return;e.stopPropagation();const c=a.textContent.trim();copyText(c);toast(`<b>CAGE ${esc(c)} copied.</b> If the CAGE site shows its terms page, click <b>I Agree</b>, then paste it (<b>Ctrl+V</b>) into the CAGE search box.`)},true);
 document.addEventListener('click',e=>{const a=e.target.closest('.cgLink');if(!a)return;e.preventDefault();e.stopPropagation();codesGuide(a.dataset.g)},true);
 function crmSave(){CRM.pipeline=pipe;store.set('bp_crm',CRM);scheduleSync()}
 function delPipe(k){delete pipe[k];CRM.deleted['p:'+k]=nowIso();crmSave()}
