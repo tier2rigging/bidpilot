@@ -1,0 +1,10 @@
+first GET 200 https://cage.dla.mil/Home/UsageAgree
+token found: yes returningURL: /Search/Results?q=97499&amp;page=1
+agree POST 404 https://cage.dla.mil/Search/Results?q=97499&amp;page=1
+55799 search 200
+href="/Search/Details?id=1162060"
+1QNQ0 search 200
+href="/Search/Details?id=446311"
+0JKF0 search 200
+href="/Search/Details?id=173374"
+The resource you are looking for has been removed, had its name changed, or is temporarily unavailable.
