@@ -1,0 +1,20 @@
+===== H-SERIES HEAD
+HTTP/2 403 
+content-type: text/html
+content-length: 498
+===== IDENTIFICATION HEAD
+HTTP/2 403 
+content-type: text/html
+content-length: 500
+===== CHARACTERISTICS HEAD
+HTTP/2 403 
+content-type: text/html
+content-length: 501
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       145G   59G   86G  41% /
+===== H-SERIES downloaded 498 bytes in 0s
+Archive:  /tmp/p/H-SERIES.zip
+===== IDENTIFICATION downloaded 500 bytes in 0s
+Archive:  /tmp/p/IDENTIFICATION.zip
+===== CHARACTERISTICS downloaded 501 bytes in 0s
+Archive:  /tmp/p/CHARACTERISTICS.zip
