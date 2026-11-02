@@ -808,7 +808,7 @@ function openDrawer(r){
   ${p.req?`<details><summary class="small" style="cursor:pointer">Read from ${esc(p.req.file||'the PDF')} on ${esc((p.req.read||'').slice(0,10))}. Click to show packaging, shipping and quality requirements.</summary>${reqSheet(p.req)}</details><button class="btn" id="dReq2" style="margin-top:6px">Print requirements</button> <button class="btn" id="dReq">Read again</button>`:`<div class="small">Download the RFQ PDF, then read it to get packaging/boxing, shipping, inspection and quality requirements.</div><button class="btn" id="dReq" style="margin-top:6px">📄 Read RFQ PDF</button>`}
   <h3 style="font-size:15px;margin:14px 0 4px">Approved sources</h3>
   ${(r[15]||[]).length?`<div class="small">DLA will only accept these exact parts. As a reseller, buy from the CAGE or an authorized distributor and keep traceability.</div>
-  <table class="aw"><tbody>${r[15].map(([c,pn])=>`<tr><td><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(c)}&page=1">${esc(c)}</a></td><td>${esc(pn)}</td><td style="white-space:nowrap"><a target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent('"'+pn+'"')}">Find distributors</a> · <a target="_blank" rel="noopener" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent('"'+pn+'"')}">Images</a></td></tr>`).join('')}</tbody></table>`
+  <table class="aw"><tbody>${r[15].map(([c,pn])=>`<tr><td>${cageA(c)}</td><td>${esc(pn)}</td><td style="white-space:nowrap"><a target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent('"'+pn+'"')}">Find distributors</a> · <a target="_blank" rel="noopener" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent('"'+pn+'"')}">Images</a></td></tr>`).join('')}</tbody></table>`
   :'<div class="small">None listed. Check the RFQ PDF for spec or drawing requirements before quoting.</div>'}
   <h3 style="font-size:15px;margin:14px 0 4px">Suppliers &amp; quotes</h3>
   <div class="small">Draft an RFQ email (opens in Thunderbird), then log the quote you get back. "Use" copies it into the bid calculator.</div>
@@ -895,7 +895,7 @@ function renderRfqHist(r,rows){
   if(rows===null){el.textContent='Not read yet. The daily job reads each RFQ\'s PDF; check back after the next run.';return}
   if(!rows.length){el.innerHTML='<b>No procurement history</b> in the RFQ. This NSN may never have been bought, or not in years.';return}
   const asC=new Set((r[15]||[]).map(a=>a[0]));
-  el.innerHTML=`<table class="aw"><tbody><tr><td><b>Date</b></td><td><b>CAGE</b></td><td><b>Qty</b></td><td><b>$/ea</b></td><td><b>Contract</b></td></tr>${rows.map(x=>`<tr><td>${esc(x[4])}</td><td><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(x[0])}&page=1">${esc(x[0])}</a>${asC.has(x[0])?' <span class="tag t-acc">AS</span>':''}</td><td>${x[2]}</td><td>$${(+x[3]).toFixed(2)}</td><td>${esc(x[1])}${/P\d{5}$/.test(x[1])?' <span class="tag t-warn">MOD</span>':''}${x[5]==='Y'?' <span class="tag t-warn">surplus</span>':''}</td></tr>`).join('')}</tbody></table>`;
+  el.innerHTML=`<table class="aw"><tbody><tr><td><b>Date</b></td><td><b>CAGE</b></td><td><b>Qty</b></td><td><b>$/ea</b></td><td><b>Contract</b></td></tr>${rows.map(x=>`<tr><td>${esc(x[4])}</td><td>${cageA(x[0])}${asC.has(x[0])?' <span class="tag t-acc">AS</span>':''}</td><td>${x[2]}</td><td>$${(+x[3]).toFixed(2)}</td><td>${esc(x[1])}${/P\d{5}$/.test(x[1])?' <span class="tag t-warn">MOD</span>':''}${x[5]==='Y'?' <span class="tag t-warn">surplus</span>':''}</td></tr>`).join('')}</tbody></table>`;
 }
 async function nsnAwards(r){
   const el=$('#nsnAw'), f=/^\d{13}$/.test(r[1])?r[1].slice(0,4):'other';
@@ -921,7 +921,7 @@ async function nsnAwards(r){
   if(!list.length){el.textContent='No awards collected for this NSN yet. History builds from the first daily run onward.';return}
   const pkg=a=>a[1]?`${DIBBS}/Awards/AwdRec.aspx?contract=${a[0]}&dlv=${a[1]}&cnt=${a[2]}`:'';
   el.innerHTML=`<table class="aw"><tbody><tr><td><b>Date</b></td><td><b>CAGE</b></td><td><b>Qty</b></td><td><b>$/ea</b></td><td><b>Total</b></td><td><b>Award</b></td></tr>${list.map(a=>`<tr>
-    <td>${a[6]}</td><td><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${a[4]}&page=1">${a[4]}</a>${asC.has(a[4])?' <span class="tag t-acc">AS</span>':''}</td>
+    <td>${a[6]}</td><td>${cageA(a[4])}${asC.has(a[4])?' <span class="tag t-acc">AS</span>':''}</td>
     <td>${a[13]??''} ${a[14]||''}</td><td>${a[15]>0?'$'+a[15].toFixed(2):''}</td>
     <td>${a[5]===0?'<span class="tag t-warn">$0 cancelled?</span>':'$'+(a[5]??0).toLocaleString(undefined,{minimumFractionDigits:2})}</td>
     <td><a target="_blank" rel="noopener" href="${a[12]}">${a[1]||a[0]}</a>${a[3]?` <span class="tag t-warn" title="Last mod posted ${a[3]}">MOD ${a[3]}</span>`:''}${pkg(a)?` · <a target="_blank" rel="noopener" href="${pkg(a)}">package</a>`:''}</td></tr>`).join('')}</tbody></table>`;
@@ -991,7 +991,7 @@ function renderSup(){
   const q=($('#supQ').value||'').toLowerCase(),co=cageOpen();
   const sv=$('#supV').value;
   const list=sups().filter(s=>(!q||[s.name,s.cage,s.email,s.contact,s.notes].join(' ').toLowerCase().includes(q))&&(sv!=='noemail'||!s.email)&&(sv!=='noname'||!s.name)&&(sv!=='noquote'||s.quoting==='No'));
-  $('#sb').innerHTML=list.map(s=>`<tr data-id="${esc(s.id)}"><td>${esc(s.name||'')}${!s.name?'<span class="small">(add name)</span>':''}${s.quoting==='No'?' <span class="tag t-warn">not quoting</span>':''}</td><td>${s.cage?`<a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(s.cage)}&page=1">${esc(s.cage)}</a>`:''}</td><td>${esc(s.contact||'')}</td><td>${esc(s.email||'')}</td><td>${esc(s.phone||'')}</td>
+  $('#sb').innerHTML=list.map(s=>`<tr data-id="${esc(s.id)}"><td>${esc(s.name||'')}${!s.name?'<span class="small">(add name)</span>':''}${s.quoting==='No'?' <span class="tag t-warn">not quoting</span>':''}</td><td>${s.cage?`${cageA(s.cage)}`:''}</td><td>${esc(s.contact||'')}</td><td>${esc(s.email||'')}</td><td>${esc(s.phone||'')}</td>
     <td>${s.cage&&co[s.cage]?`<a href="#" class="cageGo" data-c="${esc(s.cage)}">${co[s.cage]}</a>`:''}</td><td>${quoteCount(s.id)||''}</td><td class="nom">${esc((s.notes||'').slice(0,60))}</td></tr>`).join('')||'<tr><td colspan="8" class="small">No suppliers yet. Add one here, or from an RFQ\'s approved sources.</td></tr>';
 }
 $('#supQ').oninput=renderSup;$('#supV').onchange=renderSup;
@@ -1178,7 +1178,7 @@ function supForm(s,after){
   <div class="row2">${f('sEmail','Email (for RFQs)',s.email,'email')}${f('sPhone','Phone',s.phone)}</div>${f('sWeb','Website',s.website)}
   <label>Include in RFQ emails?</label><select id="sQuoting"><option value="Yes" ${s.quoting!=='No'?'selected':''}>Yes</option><option value="No" ${s.quoting==='No'?'selected':''}>No, never send them RFQs</option></select>
   <label>Notes</label><textarea id="sNotes" rows="3">${esc(s.notes||'')}</textarea><div class="small" style="margin-top:2px">Don't store passwords, bank or tax info here.</div>
-  ${s.cage?`<div class="small" style="margin-top:6px"><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(s.cage)}&page=1">Look up ${esc(s.cage)} on DLA CAGE</a> for the company name and address.</div>`:''}
+  ${s.cage?`<div class="small" style="margin-top:6px">Look up ${cageA(s.cage)} on DLA CAGE for the company name and address.</div>`:''}
   <div style="display:flex;justify-content:space-between;margin-top:10px"><button class="btn p" id="sSave">Save</button>${s.id?'<button class="btn" id="sDel">Delete</button>':''}</div>`);
   $('#mX').onclick=closeModal;
   $('#sSave').onclick=()=>{
