@@ -19,7 +19,7 @@ jobs:
         working-directory: probe/relay
         run: |
           set +e
-          O=$GITHUB_WORKSPACE/probe/flis5.txt; : > $O
+          O=$GITHUB_WORKSPACE/probe/flis6.txt; : > $O
           npm i -g wrangler@4 >/dev/null 2>&1
           API=https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID
           SUB=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" $API/workers/subdomain | jq -r '.result.subdomain // empty')
@@ -27,8 +27,8 @@ jobs:
           if [ -z "$SUB" ]; then curl -sS -X PUT -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" -d '{"subdomain":"tier2rigging"}' $API/workers/subdomain | jq -c '{success,errors}' >> $O; SUB=tier2rigging; fi
           wrangler deploy >> $O 2>&1
           KEY=$(openssl rand -hex 16); printf '%s' "$KEY" | wrangler secret put RELAY_KEY >> $O 2>&1
-          sleep 20
           U="https://bidpilot-relay-test.$SUB.workers.dev"
+          for i in $(seq 1 30); do c=$(curl -s -o /dev/null -w "%{http_code}" "$U/"); [ "$c" != "000" ] && break; sleep 10; done; echo "reachable after ~$((i*10))s (code $c)" >> $O
           for f in H-SERIES.zip IDENTIFICATION.zip CHARACTERISTICS.zip; do
             echo "== $f" >> $O
             curl -sS -o /tmp/$f -D /tmp/h -H "X-Relay-Key: $KEY" "$U/?f=$f" -w "http %{http_code} bytes %{size_download} time %{time_total}s\n" >> $O
