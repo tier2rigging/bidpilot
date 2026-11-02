@@ -1,0 +1,34 @@
+name: Probe DLA catalog files (test only)
+on:
+  push:
+    branches: [flis-probe]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect PUB LOG files
+        run: |
+          set +e
+          B="https://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/PUBLOG"
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+          mkdir -p probe /tmp/p; O=probe/flis.txt; : > $O
+          for f in H-SERIES IDENTIFICATION CHARACTERISTICS; do
+            echo "===== $f HEAD" >> $O
+            curl -sSIL -A "$UA" "$B/$f.zip" | grep -iE "^HTTP|content-length|last-modified|content-type" >> $O
+          done
+          df -h /tmp >> $O
+          for f in H-SERIES IDENTIFICATION CHARACTERISTICS; do
+            S=$(date +%s); curl -sSL -A "$UA" -o /tmp/p/$f.zip "$B/$f.zip"; echo "===== $f downloaded $(stat -c %s /tmp/p/$f.zip) bytes in $(( $(date +%s)-S ))s" >> $O
+            unzip -l /tmp/p/$f.zip | head -20 >> $O
+            for m in $(unzip -Z1 /tmp/p/$f.zip | grep -iE "\.(csv|txt)$" | head -8); do
+              echo "--- $m (first 3 lines)" >> $O; unzip -p /tmp/p/$f.zip "$m" | head -3 | cut -c1-600 >> $O
+              echo "--- $m rows for test NSNs/NIINs" >> $O; S=$(date +%s); unzip -p /tmp/p/$f.zip "$m" | grep -E "011775465|016659391|BAG,CLOTH|BAG, CLOTH|^\"?[0-9]*\"?,\"?BAG" | head -12 | cut -c1-600 >> $O; echo "(grep took $(( $(date +%s)-S ))s)" >> $O
+            done
+          done
+      - name: Save report to this test branch
+        run: |
+          git config user.name bidpilot-bot; git config user.email actions@users.noreply.github.com
+          git add probe/flis.txt && git commit -qm "FLIS probe report" && git push -q origin HEAD:flis-probe
