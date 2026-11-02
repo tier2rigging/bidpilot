@@ -10,28 +10,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect PUB LOG sources
+      - name: Inspect PUB LOG DVD contents
         run: |
           set +e
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
-          mkdir -p probe; O=probe/flis2.txt; : > $O
-          P="Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/PUBLOG/H-SERIES.zip"
-          for u in "https://dla.mil/$P" "https://www.dla.mil/$P"; do
-            echo "== $u (browser headers)" >> $O
-            curl -sSIL -A "$UA" -H "Accept: */*" -H "Accept-Language: en-US" -H "Referer: https://www.dla.mil/Information-Operations/FLIS-Data-Electronic-Reading-Room/" "$u" | grep -iE "^HTTP|content-length|last-modified" >> $O
-          done
-          Z=https://publogstorage.blob.core.windows.net/publog/PublogDVD.zip
-          echo "== $Z" >> $O; curl -sSIL "$Z" | grep -iE "^HTTP|content-length|last-modified" >> $O
-          echo "== container listing" >> $O; curl -sS "https://publogstorage.blob.core.windows.net/publog?restype=container&comp=list" | head -c 4000 >> $O; echo >> $O
-          S=$(date +%s); curl -sSL -o /tmp/dvd.zip "$Z"; echo "downloaded $(stat -c %s /tmp/dvd.zip) bytes in $(( $(date +%s)-S ))s" >> $O
-          unzip -l /tmp/dvd.zip | head -80 >> $O
-          for m in $(unzip -Z1 /tmp/dvd.zip | grep -iE "(char|h-series|hseries|identif|name).*\.(zip|csv|txt)$" | head -6); do
-            echo "--- inner $m" >> $O
-            unzip -p /tmp/dvd.zip "$m" > /tmp/inner; file /tmp/inner >> $O
-            if unzip -l /tmp/inner >/dev/null 2>&1; then unzip -l /tmp/inner | head -12 >> $O; for c in $(unzip -Z1 /tmp/inner | grep -iE "\.(csv|txt)$" | head -4); do echo "   -> $c" >> $O; unzip -p /tmp/inner "$c" | head -3 | cut -c1-500 >> $O; unzip -p /tmp/inner "$c" | grep -E "011775465|016659391" | head -6 | cut -c1-500 >> $O; done
-            else head -3 /tmp/inner | cut -c1-500 >> $O; grep -E "011775465|016659391" /tmp/inner | head -6 | cut -c1-500 >> $O; fi
+          mkdir -p probe; O=probe/flis3.txt; : > $O
+          curl -sSL -o /tmp/dvd.zip https://publogstorage.blob.core.windows.net/publog/PublogDVD.zip
+          echo "== entries outside HTML5/GRAPHICS, by size" >> $O
+          unzip -l /tmp/dvd.zip | grep -vE " HTML5/| GRAPHICS/" | sort -k1 -n -r | head -60 >> $O
+          mkdir -p /tmp/x && cd /tmp/x
+          for m in $(unzip -Z1 /tmp/dvd.zip | grep -vE "^HTML5/|^GRAPHICS/|/$" | grep -iE "\.(zip|csv|txt|dat|imd|db|sqlite|mdb|idx)$" | head -40); do
+            echo "--- $m" >> $O; unzip -p /tmp/dvd.zip "$m" > /tmp/inner 2>/dev/null; file /tmp/inner | cut -c1-200 >> $O
+            if unzip -l /tmp/inner >/dev/null 2>&1; then unzip -l /tmp/inner | head -15 >> $O
+              for c in $(unzip -Z1 /tmp/inner | grep -iE "\.(csv|txt)$" | head -5); do echo "   -> $c" >> $O; unzip -p /tmp/inner "$c" | head -3 | cut -c1-400 >> $O; unzip -p /tmp/inner "$c" | grep -aE "011775465|016659391" | head -5 | cut -c1-400 >> $O; done
+            else head -c 300 /tmp/inner | strings | head -5 >> $O; grep -caE "011775465" /tmp/inner >> $O; fi
           done
       - name: Save report to this test branch
         run: |
           git config user.name bidpilot-bot; git config user.email actions@users.noreply.github.com
-          git add probe/ && git commit -qm "FLIS probe report 2" && git pull -q --rebase origin flis-probe && git push -q origin HEAD:flis-probe
+          git add probe/ && git commit -qm "FLIS probe report 3" && git pull -q --rebase origin flis-probe && git push -q origin HEAD:flis-probe
