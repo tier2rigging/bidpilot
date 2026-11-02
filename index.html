@@ -107,6 +107,8 @@ th{font-size:10.5px;letter-spacing:.06em;font-weight:700;background:var(--soft);
 td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
 #tb tr:nth-child(even) td,#pb tr:nth-child(even) td{background:var(--row)}
 tbody tr:hover td{background:var(--hov)!important}
+#tb tr.cur td,#pb tr.cur td{background:#fff1bf!important;color:var(--ink)!important}
+#tb tr.cur td:first-child,#pb tr.cur td:first-child{box-shadow:inset 4px 0 0 #c8102e!important}
 #tb td:nth-child(3){font-weight:600;color:var(--ink)}
 #tb td:nth-child(3) .small{font-weight:400}
 #tb td:nth-child(4){font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;color:var(--ink2)}
@@ -702,7 +704,7 @@ function run(){
 function badge(r){const p=pipe[key(r)];return p?`<span class="tag t-acc">${p.status}</span>`:''}
 function renderTable(){
   const rows=filtered.slice(page*PER,(page+1)*PER);
-  $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]),sn=seen(r);return `<tr data-i="${page*PER+i}" class="${sn?'seen':'new'}" title="${sn?'Opened '+esc(new Date(CRM.viewed[vkey(r)].saved).toLocaleDateString()):'Not opened yet'}">
+  $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]),sn=seen(r);return `<tr data-i="${page*PER+i}" class="${sn?'seen':'new'}${CUR_KEY===key(r)?' cur':''}" title="${sn?'Opened '+esc(new Date(CRM.viewed[vkey(r)].saved).toLocaleDateString()):'Not opened yet'}">
     <td><input type="checkbox" class="dsel" data-i="${page*PER+i}" ${DSEL.has(key(r))?'checked':''} style="width:auto"></td><td>${sn?'':'<span class="dot"></span>'}${r[8]||''} ${r[17]?`<span class="tag t-warn" title="Return-by date passed, but DIBBS showed it Open on ${r[17]}. DLA may still take quotes.">past due · open</span>`:`<span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span>`}</td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}</td>
     <td class="nom">${esc(r[4])}${curView==='sugg'&&SUG.has(key(r))?`<br><span class="small" title="Suggestion score ${SUG.get(key(r)).sc}">${SUG.get(key(r)).why.map(esc).join(' · ')}</span>`:''}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
     <td>${SA[r[9]]||r[9]}</td><td>${(()=>{const e=resell(r),h=AMSC_HELP[r[10]||''];return`<span class="tag ${ELIG[e][0]}" title="${esc((r[10]?r[10]+': '+(AMSC[r[10]]||'')+'. ':'No AMSC. ')+ELIG[e][1]+'. '+(h?h[1]:''))}">${r[10]||'–'}</span>`})()}</td>
@@ -762,7 +764,14 @@ $('#csv').onclick=()=>csv(filtered.map(r=>[r[8],r[0],fmtNsn(r[1]),r[4],r[3],FSC[
 
 // ---------- drawer ----------
 let DR_PTW=null;
+// The row whose popup is open stays highlighted (in Discover and in the pipeline).
+let CUR_KEY=null;
+function markCur(){document.querySelectorAll('#tb tr.cur,#pb tr.cur').forEach(t=>t.classList.remove('cur'));if(!CUR_KEY)return;
+  document.querySelectorAll('#tb tr[data-i]').forEach(t=>{const r=filtered[+t.dataset.i];if(r&&key(r)===CUR_KEY)t.classList.add('cur')});
+  document.querySelectorAll('#pb tr[data-k]').forEach(t=>{if(t.dataset.k===CUR_KEY)t.classList.add('cur')})}
+function closeDrawer(){$('#drawer').classList.remove('open');CUR_KEY=null;markCur()}
 function openDrawer(r){
+  CUR_KEY=key(r);
   const k=key(r), p=pipe[k]||{};
   if(!seen(r)){markSeen(r);renderTable()}
   const dr=$('#drawer');
@@ -837,8 +846,9 @@ function openDrawer(r){
   <div class="small">Last 2 years of DLA contract awards in this FSC from USAspending.gov. Shows who wins in this category and typical award sizes.</div>
   <div id="aw" class="small" style="margin-top:8px">Loading…</div>`;
   dr.classList.add('open');
-  $("#dclose").onclick=()=>dr.classList.remove('open');
-  $('#dunseen').onclick=()=>{markSeen(r,false);renderTable();dr.classList.remove('open')};
+  markCur();
+  $("#dclose").onclick=closeDrawer;
+  $('#dunseen').onclick=()=>{markSeen(r,false);closeDrawer();renderTable()};
   const q=r[5]||1, $v=id=>$(id).value===''?null:+$(id).value;
   const $s=id=>$(id)?$(id).value.trim():'';
   const form=()=>({bqDays:$v('#bqDays'),bqOffer:$s('#bqOffer'),bqMfr:$s('#bqMfr').toUpperCase(),bqEnd:$s('#bqEnd'),bqInsp:$s('#bqInsp').toUpperCase(),cost:$v('#pc'),ship:$v('#ps'),pack:$v('#pk'),labor:$v('#pl'),freight:$v('#pf'),other:$v('#po'),mtarget:$v('#pm'),bid:$v('#pb2')});
@@ -961,6 +971,7 @@ function renderPipe(){
   $('#pb').innerHTML=items.map(p=>{const r=p.row,k=key(r),q=r[5]||1,bm=bidMath(p,q),m=p.cost!=null&&p.bid?bm.margin.toFixed(1)+'%':'';
     const qs=Object.values(p.quotes||{}),got=qs.filter(x=>x.price!=null).length;
     return `<tr data-k="${k}"><td><input type="checkbox" class="sel" data-k="${k}" ${SEL.has(k)?'checked':''} style="width:auto"></td><td><span class="tag t-acc">${p.status}</span></td><td>${r[8]} <span class="small">${daysLeft(r[8])}d</span></td><td>${r[0]}</td><td>${fmtNsn(r[1])}</td><td class="nom">${esc(r[4])}</td><td>${r[5]??''}</td><td>${qs.length?`${got}/${qs.length}`:''}</td><td>${esc(p.vendor||'')}</td><td>${p.cost??''}</td><td>${p.bid??''}</td><td>${m}</td></tr>`}).join('')||'<tr><td colspan="12" class="small">Nothing tracked yet. Open an RFQ and set a status.</td></tr>';
+  markCur();
 }
 $('#pb').onclick=e=>{if(e.target.classList.contains('sel')){const k=e.target.dataset.k;e.target.checked?SEL.add(k):SEL.delete(k);return}const tr=e.target.closest('tr[data-k]');if(tr)openDrawer(pipe[tr.dataset.k].row)};
 $('#selAll').onclick=e=>{SEL.clear();if(e.target.checked)Object.keys(pipe).forEach(k=>SEL.add(k));renderPipe()};
