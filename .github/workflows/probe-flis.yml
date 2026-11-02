@@ -2,6 +2,7 @@ name: Probe DLA catalog files (test only)
 on:
   push:
     branches: [flis-probe]
+    paths: [".github/workflows/probe-flis.yml"]
 permissions:
   contents: write
 jobs:
@@ -9,26 +10,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect PUB LOG files
+      - name: Inspect PUB LOG sources
         run: |
           set +e
-          B="https://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/PUBLOG"
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
-          mkdir -p probe /tmp/p; O=probe/flis.txt; : > $O
-          for f in H-SERIES IDENTIFICATION CHARACTERISTICS; do
-            echo "===== $f HEAD" >> $O
-            curl -sSIL -A "$UA" "$B/$f.zip" | grep -iE "^HTTP|content-length|last-modified|content-type" >> $O
+          mkdir -p probe; O=probe/flis2.txt; : > $O
+          P="Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/PUBLOG/H-SERIES.zip"
+          for u in "https://dla.mil/$P" "https://www.dla.mil/$P"; do
+            echo "== $u (browser headers)" >> $O
+            curl -sSIL -A "$UA" -H "Accept: */*" -H "Accept-Language: en-US" -H "Referer: https://www.dla.mil/Information-Operations/FLIS-Data-Electronic-Reading-Room/" "$u" | grep -iE "^HTTP|content-length|last-modified" >> $O
           done
-          df -h /tmp >> $O
-          for f in H-SERIES IDENTIFICATION CHARACTERISTICS; do
-            S=$(date +%s); curl -sSL -A "$UA" -o /tmp/p/$f.zip "$B/$f.zip"; echo "===== $f downloaded $(stat -c %s /tmp/p/$f.zip) bytes in $(( $(date +%s)-S ))s" >> $O
-            unzip -l /tmp/p/$f.zip | head -20 >> $O
-            for m in $(unzip -Z1 /tmp/p/$f.zip | grep -iE "\.(csv|txt)$" | head -8); do
-              echo "--- $m (first 3 lines)" >> $O; unzip -p /tmp/p/$f.zip "$m" | head -3 | cut -c1-600 >> $O
-              echo "--- $m rows for test NSNs/NIINs" >> $O; S=$(date +%s); unzip -p /tmp/p/$f.zip "$m" | grep -E "011775465|016659391|BAG,CLOTH|BAG, CLOTH|^\"?[0-9]*\"?,\"?BAG" | head -12 | cut -c1-600 >> $O; echo "(grep took $(( $(date +%s)-S ))s)" >> $O
-            done
+          Z=https://publogstorage.blob.core.windows.net/publog/PublogDVD.zip
+          echo "== $Z" >> $O; curl -sSIL "$Z" | grep -iE "^HTTP|content-length|last-modified" >> $O
+          echo "== container listing" >> $O; curl -sS "https://publogstorage.blob.core.windows.net/publog?restype=container&comp=list" | head -c 4000 >> $O; echo >> $O
+          S=$(date +%s); curl -sSL -o /tmp/dvd.zip "$Z"; echo "downloaded $(stat -c %s /tmp/dvd.zip) bytes in $(( $(date +%s)-S ))s" >> $O
+          unzip -l /tmp/dvd.zip | head -80 >> $O
+          for m in $(unzip -Z1 /tmp/dvd.zip | grep -iE "(char|h-series|hseries|identif|name).*\.(zip|csv|txt)$" | head -6); do
+            echo "--- inner $m" >> $O
+            unzip -p /tmp/dvd.zip "$m" > /tmp/inner; file /tmp/inner >> $O
+            if unzip -l /tmp/inner >/dev/null 2>&1; then unzip -l /tmp/inner | head -12 >> $O; for c in $(unzip -Z1 /tmp/inner | grep -iE "\.(csv|txt)$" | head -4); do echo "   -> $c" >> $O; unzip -p /tmp/inner "$c" | head -3 | cut -c1-500 >> $O; unzip -p /tmp/inner "$c" | grep -E "011775465|016659391" | head -6 | cut -c1-500 >> $O; done
+            else head -3 /tmp/inner | cut -c1-500 >> $O; grep -E "011775465|016659391" /tmp/inner | head -6 | cut -c1-500 >> $O; fi
           done
       - name: Save report to this test branch
         run: |
           git config user.name bidpilot-bot; git config user.email actions@users.noreply.github.com
-          git add probe/flis.txt && git commit -qm "FLIS probe report" && git push -q origin HEAD:flis-probe
+          git add probe/ && git commit -qm "FLIS probe report 2" && git pull -q --rebase origin flis-probe && git push -q origin HEAD:flis-probe
