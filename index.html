@@ -704,6 +704,22 @@ function renderTable(){
     <td>${(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=lastAw(r);if(!m)return histRead(r)?'<span class="small">never</span>':'';const yrs=-daysLeft(m.date)/365;return `${m.unit>0?'$'+(+m.unit).toFixed(2):''}<br><span class="small ${yrs>=2?'':''}" title="Last procured ${esc(m.date)} by CAGE ${esc(m.cage)}">${esc(m.date.slice(0,7))}${yrs>=2?' · '+Math.floor(yrs)+'y':''}</span>${m.same?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td title="${esc((TYPE_HELP[r[11]||'M']||[])[1]||'')}">${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="15" class="small">${noMatchMsg()}</td></tr>`;
   const pages=Math.max(1,Math.ceil(filtered.length/PER));$('#pg').textContent=`Page ${page+1} of ${pages}`;
 }
+// "What is this item?" quick lookups (web + images by NSN, item name and approved part numbers)
+function itemLookup(r){
+  const nsn=/^\d{13}$/.test(r[1])?r[1]:'',fn=nsn?fmtNsn(nsn):'',as=(r[15]||[]).slice(0,4);
+  const name=String(r[4]||'').replace(/\s+/g,' ').trim(), plain=name.includes(',')?name.split(',').slice(1).join(' ').trim()+' '+name.split(',')[0]:name;
+  const G=q=>'https://www.google.com/search?q='+encodeURIComponent(q), GI=q=>'https://www.google.com/search?tbm=isch&q='+encodeURIComponent(q);
+  const b=(href,txt,tip)=>`<a class="btn" target="_blank" rel="noopener" href="${href}" title="${esc(tip)}" style="font-size:12px;padding:4px 8px">${txt}</a>`;
+  return `<div class="iteminfo" style="margin:-4px 0 10px">
+    <div class="small" style="margin-bottom:4px">What is this item? Look it up:</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${nsn?b(G(`"${fn}" OR "${nsn}"`),'🔎 NSN','Search the web for this NSN')+b(GI(`"${fn}" ${plain}`),'🖼 NSN images','Pictures of this NSN'):''}
+      ${as.map(([c,pn])=>b(GI(`"${pn}" ${plain}`),'🖼 '+esc(pn),'Pictures of approved part '+pn+' (CAGE '+c+')')).join('')}
+      ${b(G(`"${plain}" military`),'🔎 '+esc(plain.toLowerCase()),'What this type of item is')}
+    </div>
+    <div id="itemCat"></div>
+  </div>`;
+}
 function noMatchMsg(){
   const toks=[...new Set((($('#q').value||'')+' '+($('#nsnList').value||'')).split(/[\s,;]+/).map(x=>x.replace(/-/g,'')).filter(x=>/^\d{13}$/.test(x)))];
   const shown=new Set(D.rows.map(r=>r[1]));
@@ -747,6 +763,7 @@ function openDrawer(r){
   const dr=$('#drawer');
   dr.innerHTML=`<div class="bar"><strong>${r[0]}</strong><span><button class="btn" id="dunseen" title="Show it as new again in the list">Mark as not opened</button> <button class="btn" id="dclose">Close ✕</button></span></div>
   <h2 style="margin:4px 0 10px;font-size:18px">${esc(r[4])}</h2>
+  ${itemLookup(r)}
   <div class="links">
     <a class="btn p" target="_blank" rel="noopener" href="${pdf(r)}">RFQ PDF</a>
     <a class="btn" target="_blank" rel="noopener" href="${DIBBS}/rfq/rfqrec.aspx?sn=${r[0]}">Solicitation page</a>
@@ -772,7 +789,7 @@ function openDrawer(r){
   ${p.req?`<details><summary class="small" style="cursor:pointer">Read from ${esc(p.req.file||'the PDF')} on ${esc((p.req.read||'').slice(0,10))}. Click to show packaging, shipping and quality requirements.</summary>${reqSheet(p.req)}</details><button class="btn" id="dReq2" style="margin-top:6px">Print requirements</button> <button class="btn" id="dReq">Read again</button>`:`<div class="small">Download the RFQ PDF, then read it to get packaging/boxing, shipping, inspection and quality requirements.</div><button class="btn" id="dReq" style="margin-top:6px">📄 Read RFQ PDF</button>`}
   <h3 style="font-size:15px;margin:14px 0 4px">Approved sources</h3>
   ${(r[15]||[]).length?`<div class="small">DLA will only accept these exact parts. As a reseller, buy from the CAGE or an authorized distributor and keep traceability.</div>
-  <table class="aw"><tbody>${r[15].map(([c,pn])=>`<tr><td><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(c)}&page=1">${esc(c)}</a></td><td>${esc(pn)}</td><td><a target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent('"'+pn+'"')}">Find distributors</a></td></tr>`).join('')}</tbody></table>`
+  <table class="aw"><tbody>${r[15].map(([c,pn])=>`<tr><td><a target="_blank" rel="noopener" href="https://cage.dla.mil/Search/Results?q=${encodeURIComponent(c)}&page=1">${esc(c)}</a></td><td>${esc(pn)}</td><td style="white-space:nowrap"><a target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent('"'+pn+'"')}">Find distributors</a> · <a target="_blank" rel="noopener" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent('"'+pn+'"')}">Images</a></td></tr>`).join('')}</tbody></table>`
   :'<div class="small">None listed. Check the RFQ PDF for spec or drawing requirements before quoting.</div>'}
   <h3 style="font-size:15px;margin:14px 0 4px">Suppliers &amp; quotes</h3>
   <div class="small">Draft an RFQ email (opens in Thunderbird), then log the quote you get back. "Use" copies it into the bid calculator.</div>
