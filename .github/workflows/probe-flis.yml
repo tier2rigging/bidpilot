@@ -24,7 +24,9 @@ jobs:
               for c in $(unzip -Z1 /tmp/inner | grep -iE "\.(csv|txt)$" | head -5); do echo "   -> $c" >> $O; unzip -p /tmp/inner "$c" | head -3 | cut -c1-400 >> $O; unzip -p /tmp/inner "$c" | grep -aE "011775465|016659391" | head -5 | cut -c1-400 >> $O; done
             else head -c 300 /tmp/inner | strings | head -5 >> $O; grep -caE "011775465" /tmp/inner >> $O; fi
           done
+          true
       - name: Save report to this test branch
+        if: always()
         run: |
           git config user.name bidpilot-bot; git config user.email actions@users.noreply.github.com
           git add probe/ && git commit -qm "FLIS probe report 3" && git pull -q --rebase origin flis-probe && git push -q origin HEAD:flis-probe
