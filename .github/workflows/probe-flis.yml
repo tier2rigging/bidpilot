@@ -2,33 +2,45 @@ name: Probe DLA catalog files (test only)
 on:
   push:
     branches: [flis-probe]
-    paths: [".github/workflows/probe-flis.yml"]
+    paths: [".github/workflows/probe-flis.yml", "probe/relay/**"]
 permissions:
   contents: write
 jobs:
   probe:
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 11cdc0918b9ff2df335c859f3d0b7c9d
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect TAB format
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Test a Cloudflare relay to dla.mil
+        working-directory: probe/relay
         run: |
           set +e
-          mkdir -p probe; O=probe/flis4.txt; : > $O
-          curl -sSL -o /tmp/dvd.zip https://publogstorage.blob.core.windows.net/publog/PublogDVD.zip
-          cd /tmp && unzip -q -o /tmp/dvd.zip V_H6_NAME_INC.TAB V_CHARACTERISTICS.TAB V_FLIS_IDENTIFICATION.TAB "CHANGES/NIIN.zip" README* "*.TXT" 2>/dev/null
-          for f in V_H6_NAME_INC.TAB V_FLIS_IDENTIFICATION.TAB V_CHARACTERISTICS.TAB; do
-            echo "===== $f $(stat -c %s $f)" >> $GITHUB_WORKSPACE/$O
-            file $f >> $GITHUB_WORKSPACE/$O
-            head -c 256 $f | xxd | head -16 >> $GITHUB_WORKSPACE/$O
-            echo "-- strings sample" >> $GITHUB_WORKSPACE/$O; strings -n 6 $f | head -25 | cut -c1-200 >> $GITHUB_WORKSPACE/$O
-            echo "-- grep test NIIN / name" >> $GITHUB_WORKSPACE/$O; grep -aob "011775465\|BAG,CLOTH\|BAG, CLOTH" $f | head -5 >> $GITHUB_WORKSPACE/$O
+          O=$GITHUB_WORKSPACE/probe/flis5.txt; : > $O
+          npm i -g wrangler@4 >/dev/null 2>&1
+          API=https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID
+          SUB=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" $API/workers/subdomain | jq -r '.result.subdomain // empty')
+          echo "workers.dev subdomain: ${SUB:-none}" >> $O
+          if [ -z "$SUB" ]; then curl -sS -X PUT -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" -d '{"subdomain":"tier2rigging"}' $API/workers/subdomain | jq -c '{success,errors}' >> $O; SUB=tier2rigging; fi
+          wrangler deploy >> $O 2>&1
+          KEY=$(openssl rand -hex 16); printf '%s' "$KEY" | wrangler secret put RELAY_KEY >> $O 2>&1
+          sleep 20
+          U="https://bidpilot-relay-test.$SUB.workers.dev"
+          for f in H-SERIES.zip IDENTIFICATION.zip CHARACTERISTICS.zip; do
+            echo "== $f" >> $O
+            curl -sS -o /tmp/$f -D /tmp/h -H "X-Relay-Key: $KEY" "$U/?f=$f" -w "http %{http_code} bytes %{size_download} time %{time_total}s\n" >> $O
+            grep -iE "x-upstream" /tmp/h >> $O
+            if unzip -l /tmp/$f >/dev/null 2>&1; then unzip -l /tmp/$f | head -8 >> $O
+              for c in $(unzip -Z1 /tmp/$f | head -6); do echo "   -> $c header + sample" >> $O; unzip -p /tmp/$f "$c" | head -2 | cut -c1-500 >> $O; unzip -p /tmp/$f "$c" | grep -aE "011775465|BAG, TOOL|\"BAG, CLOTH" | head -4 | cut -c1-500 >> $O; done
+            else head -c 300 /tmp/$f >> $O; echo >> $O; fi
           done
-          echo "===== CHANGES/NIIN.zip" >> $GITHUB_WORKSPACE/$O; unzip -l CHANGES/NIIN.zip | head >> $GITHUB_WORKSPACE/$O
-          for c in $(unzip -Z1 CHANGES/NIIN.zip | head -3); do echo "-> $c" >> $GITHUB_WORKSPACE/$O; unzip -p CHANGES/NIIN.zip "$c" | head -c 600 | strings | head -8 >> $GITHUB_WORKSPACE/$O; done
-          ls /tmp/*.TXT /tmp/README* 2>/dev/null >> $GITHUB_WORKSPACE/$O
+          wrangler delete --force >> $O 2>&1 || true
           true
       - name: Save report to this test branch
         if: always()
         run: |
           git config user.name bidpilot-bot; git config user.email actions@users.noreply.github.com
-          git add probe/ && git commit -qm "FLIS probe report 4" && git pull -q --rebase origin flis-probe && git push -q origin HEAD:flis-probe
+          git add probe/ && git commit -qm "FLIS relay probe report" && git pull -q --rebase origin flis-probe && git push -q origin HEAD:flis-probe
