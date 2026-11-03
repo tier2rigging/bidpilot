@@ -1174,7 +1174,7 @@ async function readPdf(file,forRow,lk){
   const out=$('#rdOut');out.innerHTML='<div class="small">Reading…</div>';
   try{
     const lib=await loadPdfJs();
-    const lines=await RfqReader.pdfToLines(lib,file.bytes||new Uint8Array(await file.arrayBuffer()));
+    const lines=await RfqReader.pdfToLines(lib,file.bytes instanceof Uint8Array?file.bytes:new Uint8Array(await file.arrayBuffer()));
     const res=RfqReader.parse(lines);
     if(!res.header.solicitation&&!res.items.length){out.innerHTML='<div class="small">This doesn\'t look like a DLA RFQ (no solicitation number or line items found). If it\'s a scanned PDF, it can\'t be read as text.</div>';return}
     res.file=file.name;res.read=nowIso();
