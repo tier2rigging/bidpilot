@@ -149,7 +149,7 @@ export function parseBatch(text) {
     const g = (n) => (f[n - 1] ?? '').trim();
     const key = `${g(1)}:${g(46)}`;
     if (!g(1) || m.has(key)) continue;
-    m.set(key, { type: g(2) || 'M', fob: g(32), insp: g(36), days: g(51) ? parseInt(g(51), 10) : null });
+    m.set(key, { type: g(2) || 'M', fob: g(32), insp: g(36), days: g(51) ? parseInt(g(51), 10) : null, idi: g(105) });
   }
   return m;
 }
@@ -240,8 +240,9 @@ export function parseAS(text) {
 
 // ---------- storage ----------
 // Row array order (kept short to keep the file small):
-// 0 sol, 1 nsn, 2 pr, 3 fsc, 4 nom, 5 qty, 6 unit, 7 issue, 8 ret, 9 setAside, 10 amsc, 11 type, 12 fob, 13 days, 14 file, 15 approved sources [[cage,pn],...], 16 inspection/acceptance point
-const toRow = (r) => [r.sol, r.nsn, r.pr, r.fsc, r.nom, r.qty, r.unit, r.issue, r.ret, r.sa, r.amsc, r.type || '', r.fob || '', r.days ?? null, r.file || '', r.as || [], r.insp || ''];
+// 0 sol, 1 nsn, 2 pr, 3 fsc, 4 nom, 5 qty, 6 unit, 7 issue, 8 ret, 9 setAside, 10 amsc, 11 type, 12 fob, 13 days, 14 file, 15 approved sources [[cage,pn],...], 16 inspection/acceptance point,
+// 17 (reserved: date DIBBS last showed a past-due RFQ Open), 18 item description indicator (batch col 105: D spec/standard/drawing, P approved source, B source controlled, Q QPL, N non-NSN, S service)
+const toRow = (r) => [r.sol, r.nsn, r.pr, r.fsc, r.nom, r.qty, r.unit, r.issue, r.ret, r.sa, r.amsc, r.type || '', r.fob || '', r.days ?? null, r.file || '', r.as || [], r.insp || '', null, r.idi || ''];
 
 function loadExisting() {
   try {
@@ -294,6 +295,11 @@ async function main() {
   }
 
   // Keep only RFQs still open (return-by today or later).
+  // Fill the item description indicator for lines imported before it was collected (from the saved batch rows).
+  for (const r of byKey.values()) {
+    while (r.length < 19) r.push(r.length === 17 ? null : '');
+    if (!r[18]) { const b = bqRaw.get(`${r[0]}:${r[2]}`); if (b && b[0] && b[0][105]) r[18] = b[0][105]; }
+  }
   const rows = [...byKey.values()].filter((r) => !r[8] || r[8] >= today);
   // Lines past their return-by date go to the past-due queue; ingest/pastdue.mjs keeps the ones DIBBS still shows Open.
   const QF = path.resolve('data/pastdue-queue.json');

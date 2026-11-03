@@ -33,6 +33,7 @@ const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8'))
 const key = (r) => `${r[0]}:${r[2]}:${r[1]}`;
 // Exactly the 17 RFQ fields (older lines have 16; an earlier version could leave a date in field 16).
 const base17 = (r) => { const b = r.slice(0, 17); while (b.length < 17) b.push(''); if (/^\d{4}-\d{2}-\d{2}$/.test(b[16])) b[16] = ''; return b; };
+const idiOf = (r) => (r.length >= 19 && /^[A-Z]$/.test(r[18] || '') ? r[18] : '');   // [18] item description indicator (D = drawing/spec item)
 
 // ---------- DIBBS NSN search page -> {SOL: status} ----------
 // Each result row has the solicitation (SPE7L1-25-T-04H3) and an RFQ/Quote Status cell
@@ -99,8 +100,8 @@ async function main() {
 
   // Candidate pool: key -> row (17 fields) ; shown rows carry [17] = last-checked date.
   const cand = new Map();
-  const add = (r) => { if (!r[0] || !r[8] || r[8] >= today || daysAgo(r[8]) > MAX_AGE_DAYS) return; const k = key(r); if (gone.has(k) || cand.has(k)) return; cand.set(k, base17(r)); };
-  const shown = new Map(shownPrev.map((r) => { const b = base17(r); b.push(r.length >= 18 ? r[17] : (/^\d{4}-\d{2}-\d{2}$/.test(r[16] || '') ? r[16] : today)); return [key(r), b]; }));
+  const add = (r) => { if (!r[0] || !r[8] || r[8] >= today || daysAgo(r[8]) > MAX_AGE_DAYS) return; const k = key(r); if (gone.has(k) || cand.has(k)) return; cand.set(k, [...base17(r), null, idiOf(r)]); };
+  const shown = new Map(shownPrev.map((r) => { const b = base17(r); b.push(r.length >= 18 ? r[17] : (/^\d{4}-\d{2}-\d{2}$/.test(r[16] || '') ? r[16] : today)); b.push(idiOf(r)); return [key(r), b]; }));
   for (const r of queue.rows) add(r);
 
   // Optional backfill of older daily index files (DIBBS only lists recent days; older files may still exist).
@@ -154,7 +155,7 @@ async function main() {
     checked++;
     for (const r of e.rows) {
       const k = key(r), s = status.get(r[0]);
-      if (s === 'Open') { shown.set(k, [...base17(r), today]); tries.delete(k); open++; }
+      if (s === 'Open') { shown.set(k, [...base17(r), today, idiOf(r) || idiOf(shown.get(k) || [])]); tries.delete(k); open++; }
       else if (s) { shown.delete(k); gone.set(k, s); tries.delete(k); closed++; }
       else { unknown++; unlisted.push(k); } // not listed or no status: never shown unverified
     }
