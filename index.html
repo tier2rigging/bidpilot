@@ -190,6 +190,8 @@ tbody tr:hover td{background:var(--hov)!important}
       <select id="amsc"><option value="">Any</option><option value="resell">I can bid as a reseller (open + approved part listed)</option><option value="resellopen">Open to resellers only (Z, G, L, blank)</option><option value="Z">Commercial items: COTS (AMSC Z)</option><option value="open">Open competition (G, Z, blank)</option><option value="restricted">Approved-source / restricted</option></select>
       <label>Tech data (drawings / specs) <a href="#" class="cgLink" data-g="idi" style="text-transform:none;font-weight:600">ⓘ</a></label>
       <select id="tdF"><option value="">Any</option><option value="notd">No drawings or specs to build to</option><option value="d">Drawing / spec items only</option></select>
+      <label>Security / export (from the RFQ PDF) <a href="#" class="cgLink" data-g="sec" style="text-transform:none;font-weight:600">ⓘ</a></label>
+      <select id="secF"><option value="">Any</option><option value="none">None of: CDI, CMMC, export control</option><option value="nocmmc">No CMMC or export control (CDI possible OK)</option><option value="RD003">CDI potentially applies (RD003)</option><option value="RD002">CDI applies (RD002)</option><option value="RD004">CMMC Level 2 (RD004)</option><option value="RQ032">Export-controlled tech data (RQ032)</option></select>
       <label>Approved sources</label>
       <select id="asf"><option value="">Any</option><option value="none">None listed (anyone can supply)</option><option value="has">Has approved sources</option></select>
       <label>Approved-source CAGE(s)</label>
@@ -286,6 +288,7 @@ tbody tr:hover td{background:var(--hov)!important}
 <script src="data/award-summary.js"></script>
 <script src="data/my-awards.js"></script>
 <script src="data/hist-summary.js"></script>
+<script src="data/reqcodes.js"></script>
 <script src="rfqreader.js"></script>
 <script>
 const D = window.RFQ_DATA || {rows:[]}, FSC = window.FSC_NAMES || {}, AS_SUM=(window.AWARD_SUMMARY||{}).n||{};
@@ -371,6 +374,14 @@ const AMSC_HELP={
  Y:['part','The design is unstable and major changes are expected. Limited buys from the present source; offer its exact part.'],
 };
 const IDI={D:['Drawing / spec item','Built to a government drawing, specification or standard. Get the technical data (drawings) from cFolders and a manufacturer who can make it to them, or supply a part made to the listed standard.'],P:['Approved source item','DLA names the approved part numbers (CAGE + P/N). Offer one of those exact parts. No drawings to build to.'],B:['Source controlled item','Only the sources named on the source-control drawing. Offer one of those exact parts.'],Q:['Qualified Products List item','Only products on the QPL for this item.'],N:['Non-NSN item','Not a stock-numbered item. Read the RFQ for what is wanted.'],S:['Service material item','Service material. Read the RFQ.']};
+// Security / export requirement codes read from each RFQ PDF by the daily job (data/reqcodes.js)
+const REQC=(window.REQ_CODES||{}).s||{};
+const reqOf=r=>{const v=REQC[r[0]];return v==null?null:v?v.split(','):[]};   // null = PDF not read yet
+const SEC={RD002:['CDI applies','Covered Defense Information applies (DFARS 252.204-7012): you must protect the controlled information you receive (NIST SP 800-171) and report cyber incidents.'],
+ RD003:['CDI possible','Covered Defense Information potentially applies (DFARS 252.204-7012): if you receive controlled information, such as drawings marked as CDI, you must protect it (NIST SP 800-171) and report cyber incidents.'],
+ RD004:['CMMC L2','Cybersecurity Maturity Model Certification (CMMC) Level 2 required. Read the RFQ for whether a self-assessment or a certification is needed, and have it posted in SPRS.'],
+ RQ032:['Export ctrl','Technical data is export-controlled (ITAR/EAR). To get the drawings you need Joint Certification Program (JCP) certification.']};
+const secOf=r=>(reqOf(r)||[]).filter(c=>SEC[c]);
 const ELIG={yes:['t-ok','You can bid'],part:['t-warn','Approved part only'],no:['t-acc','Not for resellers']};
 function resell(r){const c=r[10]||'',h=AMSC_HELP[c];if(!h)return (r[15]||[]).length?'part':'no';if(h[0]==='part'&&!(r[15]||[]).length)return 'no';return h[0]}
 const SA_HELP={N:['Unrestricted','Open to any business, large or small.'],Y:['Small Business set-aside','Only small businesses (by the NAICS size standard) can be awarded. You can bid if your SAM registration says small business.'],H:['HUBZone set-aside','Only SBA-certified HUBZone businesses.'],R:['SDVOSB set-aside','Only Service-Disabled Veteran-Owned Small Businesses.'],L:['WOSB set-aside','Only Women-Owned Small Businesses certified with SBA.'],E:['EDWOSB set-aside','Only Economically Disadvantaged Women-Owned Small Businesses.'],A:['8(a) set-aside','Only firms in the SBA 8(a) Business Development program.']};
@@ -388,6 +399,9 @@ function codesGuide(focus){
   <h3 id="g-idi" style="font-size:15px;margin:16px 0 4px">Item type / tech data</h3>
   <div class="small" style="margin-bottom:6px">From DIBBS's batch file (Item Description Indicator). "DWG" in the table marks drawing / spec items.</div>
   <table class="aw"><tbody>${Object.entries(IDI).map(([k,[n,d]])=>`<tr><td><b>${k}</b></td><td><b>${esc(n)}</b><br><span class="small">${esc(d)}</span></td><td style="white-space:nowrap;text-align:right">${D.rows.filter(r=>r[18]===k).length.toLocaleString()}</td></tr>`).join('')}</tbody></table>
+  <h3 id="g-sec" style="font-size:15px;margin:16px 0 4px">Security / export codes</h3>
+  <div class="small" style="margin-bottom:6px">Requirement codes printed in the RFQ PDF, read by the daily job. Shown as tags in the table.</div>
+  <table class="aw"><tbody>${Object.entries(SEC).map(([k,[n,d]])=>`<tr><td><b>${k}</b></td><td><b>${esc(n)}</b><br><span class="small">${esc(d)}</span></td><td style="white-space:nowrap;text-align:right">${D.rows.filter(r=>(reqOf(r)||[]).includes(k)).length.toLocaleString()}</td></tr>`).join('')}</tbody></table>
   <h3 id="g-sa" style="font-size:15px;margin:16px 0 4px">Set-aside</h3>
   <table class="aw"><tbody>${Object.entries(SA_HELP).map(([k,[n,d]])=>`<tr><td><b>${esc(n)}</b><br><span class="small">${esc(d)}</span></td><td style="white-space:nowrap;text-align:right">${(sac[k]||0).toLocaleString()}</td></tr>`).join('')}</tbody></table>
   <h3 id="g-type" style="font-size:15px;margin:16px 0 4px">RFQ type</h3><div class="small" style="margin-bottom:6px">How DLA evaluates the quotes. It doesn't limit who can bid: all four types are open to resellers. Whether you can bid comes from the AMSC and the set-aside.</div>
@@ -683,7 +697,7 @@ $('#saBox').addEventListener('change',()=>{page=0;run()});
 let _nlTxt=null,_nl=null;
 function nsnListSet(){const t=$('#nsnList').value;if(t===_nlTxt)return _nl;_nlTxt=t;const toks=t.split(/[\s,;]+/).map(x=>x.replace(/-/g,'').toUpperCase()).filter(x=>x.length>=3);_nl=toks.length?new Set(toks):null;$('#nsnListN').textContent=_nl?`${_nl.size} NSNs / part numbers`:'';return _nl}
 // Saved views: every filter, the FSC list and the sort, saved under a name. Synced with the CRM.
-const VIEW_IDS=['q','nsnList','pdF','tdF','posted','fsg','amsc','asf','cage','hist','fobF','inspF','type','close','minleft','qmin','qmax'];
+const VIEW_IDS=['q','nsnList','pdF','tdF','secF','posted','fsg','amsc','asf','cage','hist','fobF','inspF','type','close','minleft','qmin','qmax'];
 let curView='';
 function captureView(){const v={};for(const id of VIEW_IDS)v[id]=$('#'+id).value;v.hideSeen=$('#hideSeen').checked;v.sa=[...document.querySelectorAll('#saBox input:checked')].map(i=>i.value);v.fsc=[...fscSel];v.sortK=sortK;v.sortDir=sortDir;return v}
 function applyView(v){for(const id of VIEW_IDS)$('#'+id).value=v[id]??(id==='minleft'?'0':'');$('#hideSeen').checked=!!v.hideSeen;document.querySelectorAll('#saBox input').forEach(i=>i.checked=(v.sa||[]).includes(i.value));fscSel=new Set(v.fsc||[]);sortK=v.sortK??8;sortDir=v.sortDir??1;page=0;chips();run()}
@@ -757,13 +771,17 @@ $('#fFindGo').onclick=runFind;$('#fFind').addEventListener('keydown',e=>{if(e.ke
 function filt(skipFsc){
   const saSet=new Set([...document.querySelectorAll('#saBox input:checked')].map(i=>i.value)), posted=$('#posted').value, nl=nsnListSet(), hideSeen=$('#hideSeen').checked, fobF=$('#fobF').value, inspF=$('#inspF').value, hist=$('#hist').value, asf=$('#asf').value, cages=$('#cage').value.toUpperCase().split(/[\s,]+/).filter(Boolean), q=$('#q').value.trim().toLowerCase().replace(/-/g,''), fsg=$('#fsg').value, am=$('#amsc').value, ty=$('#type').value;
   const cl=+$('#close').value||0, ml=+$('#minleft').value||0, qmin=+$('#qmin').value||0, qmax=+$('#qmax').value||0;
-  const pdF=$('#pdF').value,tdF=$('#tdF').value;
+  const pdF=$('#pdF').value,tdF=$('#tdF').value,secF=$('#secF').value;
   return D.rows.filter(r=>{
     const as=r[15]||[];
     if(pdF===''&&r[17]&&curView!=='sugg')return false;
     if(pdF==='pd'&&!r[17])return false;
     if(tdF==='notd'&&(!r[18]||r[18]==='D'))return false;   // unknown (no batch data) is left out
     if(tdF==='d'&&r[18]!=='D')return false;
+    if(secF){const rc=reqOf(r);if(!rc)return false;                     // PDF not read yet: unknown, left out
+      if(secF==='none'&&rc.some(c=>SEC[c]))return false;
+      if(secF==='nocmmc'&&rc.some(c=>c==='RD004'||c==='RQ032'||c==='RD002'))return false;
+      if(SEC[secF]&&!rc.includes(secF))return false}
     if(r[17]&&-daysLeft(r[8])>183)return false;
     if(q && !(`${r[0]} ${r[1]} ${r[4]} ${r[2]} ${as.map(a=>a.join(' ')).join(' ')}`.toLowerCase().replace(/-/g,'').includes(q)))return false;
     if(hideSeen && seen(r))return false;
@@ -817,7 +835,7 @@ function renderTable(){
   $('#tb').innerHTML=rows.map((r,i)=>{const dl=daysLeft(r[8]),sn=seen(r);return `<tr data-i="${page*PER+i}" class="${sn?'seen':'new'}${CUR_KEY===key(r)?' cur':''}" title="${sn?'Opened '+esc(new Date(CRM.viewed[vkey(r)].saved).toLocaleDateString()):'Not opened yet'}">
     <td><input type="checkbox" class="dsel" data-i="${page*PER+i}" ${DSEL.has(key(r))?'checked':''} style="width:auto"></td><td>${sn?'':'<span class="dot"></span>'}${r[8]||''} ${r[17]?`<span class="tag t-warn" title="Return-by date passed, but DIBBS showed it Open on ${r[17]}. DLA may still take quotes.">past due · open</span>`:`<span class="tag ${dl<=3?'t-warn':'t-ok'}">${dl??''}d</span>`}</td><td>${r[0]}<br><span class="small">PR ${r[2]||''}</span></td><td>${fmtNsn(r[1])}${isWatched(r[1])?' <span title="On your watchlist">🔔</span>':''}</td>
     <td class="nom">${esc(r[4])}${curView==='sugg'&&SUG.has(key(r))?`<br><span class="small" title="Suggestion score ${SUG.get(key(r)).sc}">${SUG.get(key(r)).why.map(esc).join(' · ')}</span>`:''}</td><td title="${esc(FSC[r[3]]||'')}">${r[3]||''}</td><td>${r[5]??''} ${r[6]||''}</td>
-    <td>${SA[r[9]]||r[9]}</td><td>${(()=>{const e=resell(r),h=AMSC_HELP[r[10]||''];return`<span class="tag ${ELIG[e][0]}" title="${esc((r[10]?r[10]+': '+(AMSC[r[10]]||'')+'. ':'No AMSC. ')+ELIG[e][1]+'. '+(h?h[1]:''))}">${r[10]||'–'}</span>${r[18]==='D'?' <span class="tag t-warn" title="Drawing / spec item: tech data (drawings) needed">DWG</span>':''}`})()}</td>
+    <td>${SA[r[9]]||r[9]}</td><td>${(()=>{const e=resell(r),h=AMSC_HELP[r[10]||''];return`<span class="tag ${ELIG[e][0]}" title="${esc((r[10]?r[10]+': '+(AMSC[r[10]]||'')+'. ':'No AMSC. ')+ELIG[e][1]+'. '+(h?h[1]:''))}">${r[10]||'–'}</span>${r[18]==='D'?' <span class="tag t-warn" title="Drawing / spec item: tech data (drawings) needed">DWG</span>':''}${secOf(r).map(c=>` <span class="tag ${c==='RD003'?'t-warn':'t-acc'}" title="${esc(c+': '+SEC[c][1])}">${SEC[c][0]}</span>`).join('')}`})()}</td>
     <td>${(r[15]||[]).length===1?`<span class="tag t-warn">${cageA(r[15][0][0])}</span>`:(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}: open the RFQ to see each one">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=lastAw(r);if(!m)return histRead(r)?'<span class="small">never</span>':'';const yrs=-daysLeft(m.date)/365;return `${m.unit>0?'$'+(+m.unit).toFixed(2):''}<br><span class="small ${yrs>=2?'':''}" title="Last procured ${esc(m.date)} by CAGE ${esc(m.cage)}">${esc(m.date.slice(0,7))}${yrs>=2?' · '+Math.floor(yrs)+'y':''}</span>${m.same?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td title="${esc((TYPE_HELP[r[11]||'M']||[])[1]||'')}">${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="15" class="small">${noMatchMsg()}</td></tr>`;
   const pages=Math.max(1,Math.ceil(filtered.length/PER));$('#pg').textContent=`Page ${page+1} of ${pages}`;
 }
@@ -852,8 +870,8 @@ function renderFscList(){
   $('#fscList').innerHTML=Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,150).map(([f,n])=>`<div data-f="${f}"><span>${f} ${esc((FSC[f]||'').slice(0,30))}</span><b>${n}</b></div>`).join('')||'<div class="small">None</div>';
 }
 $('#fscList').onclick=e=>{const d=e.target.closest('[data-f]');if(d){fscSel.add(d.dataset.f);chips();run()}};
-['#q','#nsnList','#pdF','#tdF','#posted','#fsg','#amsc','#asf','#cage','#hist','#hideSeen','#fobF','#inspF','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
-$('#reset').onclick=()=>{document.querySelectorAll('#saBox input').forEach(i=>i.checked=false);curView=(CFG.myfsc||[]).length?'':'all';renderViews();['#q','#nsnList','#pdF','#tdF','#posted','#fsg','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();$('#hideSeen').checked=false;chips();run()};
+['#q','#nsnList','#pdF','#tdF','#secF','#posted','#fsg','#amsc','#asf','#cage','#hist','#hideSeen','#fobF','#inspF','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
+$('#reset').onclick=()=>{document.querySelectorAll('#saBox input').forEach(i=>i.checked=false);curView=(CFG.myfsc||[]).length?'':'all';renderViews();['#q','#nsnList','#pdF','#tdF','#secF','#posted','#fsg','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();$('#hideSeen').checked=false;chips();run()};
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=+th.dataset.k;sortDir=sortK===k?-sortDir:1;sortK=k;run()});
 $('#prev').onclick=()=>{if(page>0){page--;renderTable()}};
 $('#next').onclick=()=>{if((page+1)*PER<filtered.length){page++;renderTable()}};
@@ -904,6 +922,7 @@ function openDrawer(r){
     <div>Posted</div><div>${r[7]||''}</div>
     <div>Set-aside</div><div>${SA[r[9]]||r[9]}</div>
     <div>Item type</div><div>${r[18]&&IDI[r[18]]?`<b>${esc(IDI[r[18]][0])}</b>${r[18]==='D'?' <span class="tag t-warn">tech data</span>':''}<br><span class="small">${esc(IDI[r[18]][1])}</span>`:'<span class="small">Not in DIBBS\'s batch data. Check the RFQ PDF.</span>'}</div>
+    <div>Security / export</div><div>${(()=>{const rc=reqOf(r);if(!rc)return '<span class="small">Not read yet. The daily job reads each RFQ PDF; or use 📄 Read RFQ.</span>';const s=secOf(r);return s.length?s.map(c=>`<span class="tag ${c==='RD003'?'t-warn':'t-acc'}">${esc(c)} ${esc(SEC[c][0])}</span> <span class="small">${esc(SEC[c][1])}</span>`).join('<br>'):'<span class="tag t-ok">None</span> <span class="small">No CDI, CMMC or export-control codes in the RFQ.</span>'})()}</div>
     <div>AMSC</div><div>${r[10]?`${r[10]}: ${esc(AMSC[r[10]]||'')}`:'—'} <span class="tag ${ELIG[resell(r)][0]}">${ELIG[resell(r)][1]}</span><br><span class="small">${esc((AMSC_HELP[r[10]||'']||['',(r[15]||[]).length?'Offer one of the listed approved parts.':'Restricted, with no approved source listed.'])[1])}</span> <a href="#" class="cgLink" data-g="amsc">ⓘ all codes</a></div>
     <div>RFQ type</div><div>${TYPE[r[11]]||'—'}${TYPE_HELP[r[11]||'M']?`<br><span class="small">${esc(TYPE_HELP[r[11]||'M'][1])}</span>`:''}</div>
     <div>FOB</div><div>${r[12]==='O'?'Origin':r[12]==='D'?'Destination':'—'}</div>
@@ -1133,6 +1152,7 @@ function reqChecklist(res,it){
   if(it.palletization)c.push('Palletize per RP001 when shipping multiple boxes.');
   if(it.iuid&&!/not required/i.test(it.iuid))c.push('<b>IUID</b> marking may be required (2D data matrix). Read the IUID note.');
   if(it.transport.some(t=>/FASTEST|NMCS|777|999|EXPEDITE/i.test(t)))c.push('<b>Priority shipment</b>: ship by the fastest traceable means.');
+  for(const [code] of it.reqCodes)if(SEC[code])c.push(`<b>${esc(code)} ${esc(SEC[code][0])}</b>: ${esc(SEC[code][1])}`);
   if(it.reqCodes.some(x=>x[0]==='RQ017'))c.push('Item must have physical identification / bare-item marking (RQ017).');
   if(has('252.225-7001')||has('252.225-7012'))c.push('Domestic-source clauses present (Buy American / Berry). Confirm the country of origin with your supplier.');
   if(has('52.223-3'))c.push('If the item is hazardous: an SDS is required with your offer and shipment.');

@@ -48,6 +48,15 @@ export function parseHistory(text) {
   return out;
 }
 
+// Requirement codes printed in the RFQ ("RD003, COVERED DEFENSE INFORMATION..." / "RQ032: EXPORT CONTROL...").
+export function parseReqCodes(text) {
+  const out = new Set();
+  for (const m of text.matchAll(/^\s*([RI][A-Z]\d{3})\s*[:,]/gm)) if (m[1] !== 'RA001') out.add(m[1]);
+  return [...out].sort();
+}
+const REQ_FILE = path.resolve('data/reqcodes.js');
+function loadReq() { try { const t = fs.readFileSync(REQ_FILE, 'utf8'); return JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)).s || {}; } catch { return {}; } }
+
 function pdfText(file) {
   try { return execFileSync('pdftotext', ['-q', '-layout', file, '-'], { encoding: 'latin1', maxBuffer: 50e6, stdio: ['ignore', 'pipe', 'ignore'] }); }
   catch { return ''; }
@@ -118,7 +127,9 @@ async function main() {
   try { execFileSync('pdftotext', ['-v'], { stdio: 'ignore' }); } catch { hasPdftotext = false; }
   if (!hasPdftotext) { log('pdftotext not installed; skipping'); return; }
 
+  const req = loadReq();   // sol -> "RD003,RP001,…" (requirement codes from the PDF)
   const absorb = (sol, text) => {
+    if (text) req[sol] = parseReqCodes(text).join(',');
     for (const [nsn, rows] of parseHistory(text)) merge(map, nsn, rows);
     // An RFQ PDF with no history table still counts as read: record empty history for its NSNs.
     const e = bySol.get(sol);
@@ -151,7 +162,7 @@ async function main() {
   } catch (e) { log('ca zip list failed:', e.message); }
 
   // Fallback: open RFQs not read yet, soonest-closing first, one PDF at a time.
-  const todo = [...bySol.entries()].filter(([sol]) => !doneSols.has(sol));
+  const todo = [...bySol.entries()].filter(([sol]) => !doneSols.has(sol) || !(sol in req));   // also re-read PDFs read before codes were collected
   const closing = new Map(rfq.rows.map((r) => [r[0], r[8] || '']));
   // Today's open RFQs first (soonest closing), then past-due ones still open (newest first).
   todo.sort((a, b) => (pastDue.has(a[0]) - pastDue.has(b[0])) || (pastDue.has(a[0]) ? (closing.get(b[0]) || '').localeCompare(closing.get(a[0]) || '') : (closing.get(a[0]) || '').localeCompare(closing.get(b[0]) || '')));
@@ -164,12 +175,15 @@ async function main() {
       const f = path.join(tmp, name);
       fs.writeFileSync(f, await get(`${FILES}/Downloads/RFQ/${sol.slice(-1)}/${name}`, true));
       absorb(sol, pdfText(f)); fs.rmSync(f, { force: true }); n++;
-      if (n % 100 === 0) { saveAll(map, openNsn); log(`${n} RFQ PDFs read one by one`); }
+      if (n % 100 === 0) { saveAll(map, openNsn); { const ro = {}; for (const s2 of bySol.keys()) if (s2 in req) ro[s2] = req[s2]; fs.writeFileSync(REQ_FILE, 'window.REQ_CODES=' + JSON.stringify({ updated: new Date().toISOString(), s: ro }) + ';\n'); } log(`${n} RFQ PDFs read one by one`); }
     } catch (err) { if (n < 5) log('pdf failed', sol, err.message); }
   }
   fs.rmSync(tmp, { recursive: true, force: true });
 
   const nSum = saveAll(map, openNsn);
+  const reqOut = {}; for (const sol of bySol.keys()) if (sol in req) reqOut[sol] = req[sol];
+  fs.writeFileSync(REQ_FILE, 'window.REQ_CODES=' + JSON.stringify({ updated: new Date().toISOString(), s: reqOut }) + ';\n');
+  log(`requirement codes stored for ${Object.keys(reqOut).length} of ${bySol.size} RFQs`);
   // Keep the done list to open solicitations plus recent days.
   const openSols = new Set(bySol.keys());
   fs.writeFileSync(DONE_FILE, JSON.stringify({ sols: [...doneSols].filter((s) => openSols.has(s)), days: [...doneDays].sort().slice(-60) }));

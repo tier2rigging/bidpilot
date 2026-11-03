@@ -92,7 +92,7 @@
       const prm = txt.match(/PR:\s*(\d{10})/); if (prm) it.pr = prm[1];
       const di = blk.findIndex((l) => /^\s*ITEM DESCRIPTION\s*$/.test(l)); if (di >= 0) it.description = clean(blk[di + 1]);
       for (const l of blk) {
-        const rc = l.match(/^\s*([RI][A-Z]\d{3}):\s*(.+)$/); if (rc && !/^RA001$/.test(rc[1])) it.reqCodes.push([rc[1], clean(rc[2])]);
+        const rc = l.match(/^\s*([RI][A-Z]\d{3})\s*[:,]\s*(.+)$/); if (rc && !/^RA001$/.test(rc[1])) it.reqCodes.push([rc[1], clean(rc[2])]);
         const ap = l.match(/^\s*(.+?)\s+([0-9A-Z]{5})\s+P\/N\s+(\S+)\s*$/); if (ap) it.approved.push([clean(ap[1]), ap[2], ap[3]]);
         // Technical data: "IAW BASIC|REFERENCE <doc>", then "REVISION NR x DTD date", then "PART PIECE NUMBER: pn"
         const iaw = l.match(/^\s*IAW\s+(.+)$/i); if (iaw) (it.drawings = it.drawings || []).push({ doc: clean(iaw[1]) });
