@@ -656,7 +656,7 @@ if(D.sample)$('#sampleBanner').classList.remove('hidden');
 $('#fscOpts').innerHTML=Object.entries(FSC).map(([c,n])=>`<option value="${c} — ${esc(n)}">`).join('');
 $('#fsg').innerHTML+=Object.entries(FSG).map(([c,n])=>`<option value="${c}">${c} ${esc(n)}</option>`).join('');
 
-function chips(){ $('#fscChips').innerHTML=[...fscSel].map(c=>`<span class="chip" data-c="${c}" title="Remove">${c} ${esc((FSC[c]||'').slice(0,22))} ×</span>`).join(''); store.set('t2_fscSel',[...fscSel]); }
+function chips(){ if(typeof renderViews==='function'&&$('#vtabs'))setTimeout(renderViews,0); $('#fscChips').innerHTML=[...fscSel].map(c=>`<span class="chip" data-c="${c}" title="Remove">${c} ${esc((FSC[c]||'').slice(0,22))} ×</span>`).join(''); store.set('t2_fscSel',[...fscSel]); }
 $('#fscChips').onclick=e=>{const c=e.target.dataset.c;if(c){fscSel.delete(c);chips();run()}};
 $('#fscIn').addEventListener('change',e=>{
   const v=e.target.value.trim(); const codes=(v.match(/\b\d{4}\b/g)||[]).filter(c=>FSC[c]);
@@ -681,17 +681,37 @@ const VIEW_IDS=['q','nsnList','pdF','posted','fsg','amsc','asf','cage','hist','f
 let curView='';
 function captureView(){const v={};for(const id of VIEW_IDS)v[id]=$('#'+id).value;v.hideSeen=$('#hideSeen').checked;v.sa=[...document.querySelectorAll('#saBox input:checked')].map(i=>i.value);v.fsc=[...fscSel];v.sortK=sortK;v.sortDir=sortDir;return v}
 function applyView(v){for(const id of VIEW_IDS)$('#'+id).value=v[id]??(id==='minleft'?'0':'');$('#hideSeen').checked=!!v.hideSeen;document.querySelectorAll('#saBox input').forEach(i=>i.checked=(v.sa||[]).includes(i.value));fscSel=new Set(v.fsc||[]);sortK=v.sortK??8;sortDir=v.sortDir??1;page=0;chips();run()}
+// Tabs: ★ Suggested · All FSCs · My FSCs · FSC tabs (just a set of FSCs) · saved views (full filter sets)
+function fscCount(set){let n=0;for(const r of D.rows)if(!r[17]&&(!set||set.has(r[3])))n++;return n}
 function renderViews(){
-  const vs=Object.entries(CRM.views||{}).filter(([,v])=>v.kind!=='pipe').sort((a,b)=>(a[1].order||0)-(b[1].order||0));
-  $('#vtabs').innerHTML=`<span class="vtab ${curView==='sugg'?'on':''}" data-v="sugg" title="Easy-win candidates, refreshed with every daily update: open RFQs (including past-due ones DIBBS still shows Open) for commercial or open-sourcing items with a part to buy, never procured or not bought in 1+ years, ranked best first">★ Suggested${SUG.size?` (${SUG.size.toLocaleString()})`:''}</span><span class="vtab ${curView===''?'on':''}" data-v="">All RFQs</span>`+vs.map(([id,v])=>`<span class="vtab ${curView===id?'on':''}" data-v="${esc(id)}">${esc(v.name)} <b data-del="${esc(id)}" title="Delete view">×</b></span>`).join('')+`<span class="vtab" id="vSave" title="Save the current filters as a tab">+ Save view</span>${curView?'<span class="vtab" id="vUpd" title="Overwrite this tab with the current filters">Update view</span>':''}`;
+  const all=Object.entries(CRM.views||{}).filter(([,v])=>v.kind!=='pipe').sort((a,b)=>(a[1].order||0)-(b[1].order||0));
+  const fv=all.filter(([,v])=>v.kind==='fsc'),vs=all.filter(([,v])=>v.kind!=='fsc'),my=CFG.myfsc||[];
+  const tab=(id,label,title,del)=>`<span class="vtab ${curView===id?'on':''}" data-v="${esc(id)}" title="${esc(title||'')}">${label}${del?` <b data-del="${esc(id)}" title="Delete this tab">×</b>`:''}</span>`;
+  const cnt=n=>` <span class="small" style="opacity:.75">${n.toLocaleString()}</span>`;
+  const isFscTab=curView&&CRM.views[curView]&&CRM.views[curView].kind==='fsc';
+  $('#vtabs').innerHTML=tab('sugg',`★ Suggested${SUG.size?` (${SUG.size.toLocaleString()})`:''}`,'Easy-win candidates, refreshed with every daily update: open RFQs (including past-due ones DIBBS still shows Open) for commercial or open-sourcing items with a part to buy, never procured or not bought in 1+ years, ranked best first')
+   +tab('all','All FSCs'+cnt(fscCount(null)),'Every open RFQ in every FSC (your other filters still apply)')
+   +(my.length?tab('','My FSCs'+cnt(fscCount(new Set(my))),'Your saved "My FSCs": '+my.join(', ')):'')
+   +fv.map(([id,v])=>tab(id,'▦ '+esc(v.name)+cnt(fscCount(new Set(v.fsc||[]))),'FSC tab: '+(v.fsc||[]).join(', '),true)).join('')
+   +vs.map(([id,v])=>tab(id,esc(v.name),'Saved view (all filters)',true)).join('')
+   +`<span class="vtab" id="vFsc" title="Make a tab from the FSCs selected on the left">+ FSC tab</span><span class="vtab" id="vSave" title="Save all current filters as a tab">+ Save view</span>`
+   +(isFscTab?([...fscSel].sort().join()!==[...(CRM.views[curView].fsc||[])].sort().join()?`<span class="vtab" id="vUpd" title="Save the FSCs selected on the left into this tab" style="border-color:#c8102e;color:#c8102e">Save FSC changes</span>`:''):curView&&CRM.views[curView]?'<span class="vtab" id="vUpd" title="Overwrite this tab with the current filters">Update view</span>':'');
 }
 $('#vtabs').onclick=e=>{
-  const d=e.target.closest('[data-del]');if(d){const id=d.dataset.del;if(confirm('Delete this view?')){delete CRM.views[id];CRM.deleted['w:'+id]=nowIso();crmSave();if(curView===id)curView='';renderViews()}return}
-  if(e.target.closest('#vSave')){const name=prompt('Name this view (e.g. "My FSCs · small business · closing 7 days")');if(!name)return;const id='w'+Date.now().toString(36);CRM.views[id]={name:name.trim(),f:captureView(),order:Date.now(),saved:nowIso()};crmSave();curView=id;renderViews();return}
-  if(e.target.closest('#vUpd')){const v=CRM.views[curView];if(v){v.f=captureView();v.saved=nowIso();crmSave();renderViews()}return}
+  const d=e.target.closest('[data-del]');if(d){e.stopPropagation();const id=d.dataset.del;if(confirm(`Delete the "${(CRM.views[id]||{}).name}" tab?`)){delete CRM.views[id];CRM.deleted['w:'+id]=nowIso();crmSave();if(curView===id)curView='all';renderViews()}return}
+  if(e.target.closest('#vFsc')){if(!fscSel.size){toast('First pick the FSCs for this tab on the left (Add FSC or Find FSCs), then click <b>+ FSC tab</b>.');return}
+    const name=prompt(`Name this FSC tab (${fscSel.size} FSC${fscSel.size>1?'s':''}: ${[...fscSel].slice(0,6).join(', ')}${fscSel.size>6?'…':''})`,'');if(!name)return;
+    const id='w'+Date.now().toString(36);CRM.views[id]={name:name.trim(),kind:'fsc',fsc:[...fscSel],order:Date.now(),saved:nowIso()};crmSave();curView=id;renderViews();toast(`FSC tab "${esc(name.trim())}" saved.`);return}
+  if(e.target.closest('#vSave')){const name=prompt('Name this view (e.g. "Small business · closing 7 days")');if(!name)return;const id='w'+Date.now().toString(36);CRM.views[id]={name:name.trim(),f:captureView(),order:Date.now(),saved:nowIso()};crmSave();curView=id;renderViews();return}
+  if(e.target.closest('#vUpd')){const v=CRM.views[curView];if(v){if(v.kind==='fsc'){if(!fscSel.size)return toast('Pick at least one FSC.');v.fsc=[...fscSel]}else v.f=captureView();v.saved=nowIso();crmSave();renderViews();toast('Tab updated.')}return}
   const t=e.target.closest('[data-v]');if(!t)return;curView=t.dataset.v;
   if(curView==='sugg'){const keep=[...fscSel];$('#reset').click();curView='sugg';fscSel=new Set(keep.length?keep:(CFG.myfsc||[]));chips();loadPastDue();sugRefresh();renderViews();run();return}
-  if(curView===''){$('#reset').click();loadMyFsc();run()}else applyView(CRM.views[curView].f);renderViews();
+  const v=CRM.views[curView];
+  if(curView==='all'){fscSel.clear();chips()}                     // every FSC; other filters stay
+  else if(curView===''){loadMyFsc()}
+  else if(v&&v.kind==='fsc'){fscSel=new Set(v.fsc||[]);chips()}  // swap the FSCs only
+  else if(v){applyView(v.f);renderViews();return}
+  page=0;renderViews();run();
 };
 // ---------- Find FSCs: match a plain-English description against FSC names and open RFQ item names ----------
 const SYN={sling:['rigging','hoist','lifting'],webbing:['strap','tape'],strap:['webbing','tiedown'],
@@ -825,7 +845,7 @@ function renderFscList(){
 }
 $('#fscList').onclick=e=>{const d=e.target.closest('[data-f]');if(d){fscSel.add(d.dataset.f);chips();run()}};
 ['#q','#nsnList','#pdF','#posted','#fsg','#amsc','#asf','#cage','#hist','#hideSeen','#fobF','#inspF','#type','#close','#minleft','#qmin','#qmax'].forEach(s=>$(s).addEventListener('input',()=>{page=0;run()}));
-$('#reset').onclick=()=>{document.querySelectorAll('#saBox input').forEach(i=>i.checked=false);curView='';renderViews();['#q','#nsnList','#pdF','#posted','#fsg','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();$('#hideSeen').checked=false;chips();run()};
+$('#reset').onclick=()=>{document.querySelectorAll('#saBox input').forEach(i=>i.checked=false);curView=(CFG.myfsc||[]).length?'':'all';renderViews();['#q','#nsnList','#pdF','#posted','#fsg','#amsc','#asf','#cage','#hist','#fobF','#inspF','#type','#close','#qmin','#qmax'].forEach(s=>$(s).value='');$('#minleft').value='0';fscSel.clear();$('#hideSeen').checked=false;chips();run()};
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=+th.dataset.k;sortDir=sortK===k?-sortDir:1;sortK=k;run()});
 $('#prev').onclick=()=>{if(page>0){page--;renderTable()}};
 $('#next').onclick=()=>{if((page+1)*PER<filtered.length){page++;renderTable()}};
