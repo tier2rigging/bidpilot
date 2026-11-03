@@ -194,7 +194,7 @@ tbody tr:hover td{background:var(--hov)!important}
       <input id="cage" placeholder="e.g. 1A2B3, 0PMV4">
       <label style="display:flex;gap:6px;align-items:center;text-transform:none;font-size:13px;font-weight:600;color:var(--ink);margin-top:12px"><input type="checkbox" id="hideSeen" style="width:auto"> Hide RFQs I've opened</label>
       <label>Award history</label>
-      <select id="hist"><option value="">Any</option><option value="has">Has procurement history</option><option value="old1">Last procured over 1 year ago</option><option value="old2">Last procured over 2 years ago</option><option value="none">Never procured (per RFQ history)</option><option value="nosame">Hide same winner (last 3)</option><option value="noaswon">Hide where approved source won last</option></select>
+      <select id="hist"><option value="">Any</option><option value="has">Has procurement history</option><option value="old1n">Not bought in 1+ years, or never</option><option value="old1">Last procured over 1 year ago</option><option value="old2">Last procured over 2 years ago</option><option value="none">Never procured (per RFQ history)</option><option value="nosame">Hide same winner (last 3)</option><option value="noaswon">Hide where approved source won last</option></select>
       <div class="row2">
         <div><label>FOB</label><select id="fobF"><option value="">Any</option><option value="O">Origin</option><option value="D">Destination</option></select></div>
         <div><label>Insp./Accept.</label><select id="inspF"><option value="">Any</option><option value="O">Origin</option><option value="D">Destination</option></select></div>
@@ -317,9 +317,11 @@ function sugOf(r){
   let sc=0;const why=[];
   if(z){sc+=30;why.push('COTS (AMSC Z)')}else{sc+=12;why.push('Open sourcing')}
   const la=lastAw(r),age=la?-daysLeft(la.date)/365:null;
-  if(!la&&histRead(r)){sc+=25;why.push('Never procured')}
-  else if(la&&age>=2){sc+=22;why.push(`Last bought ${Math.floor(age)}y ago`)}
-  else if(la&&age>=1){sc+=10;why.push('Last bought 1y+ ago')}
+  if(!la&&!histRead(r))return null;           // history not read yet: can't tell, leave it out
+  if(la&&age<1)return null;                   // bought within the last year: not low-hanging fruit
+  if(!la){sc+=25;why.push('Never procured')}
+  else if(age>=2){sc+=22+Math.min(8,Math.floor(age)-2);why.push(`Last bought ${Math.floor(age)}y ago`)}
+  else{sc+=14;why.push('Last bought 1y+ ago')}
   if(la&&la.same)sc-=15;else if(la){sc+=6;why.push('No repeat winner')}
   if(la&&asWonLast(r))sc-=5;
   if(as.length){sc+=8;why.push(`${as.length} approved P/N`)}
@@ -681,7 +683,7 @@ function captureView(){const v={};for(const id of VIEW_IDS)v[id]=$('#'+id).value
 function applyView(v){for(const id of VIEW_IDS)$('#'+id).value=v[id]??(id==='minleft'?'0':'');$('#hideSeen').checked=!!v.hideSeen;document.querySelectorAll('#saBox input').forEach(i=>i.checked=(v.sa||[]).includes(i.value));fscSel=new Set(v.fsc||[]);sortK=v.sortK??8;sortDir=v.sortDir??1;page=0;chips();run()}
 function renderViews(){
   const vs=Object.entries(CRM.views||{}).filter(([,v])=>v.kind!=='pipe').sort((a,b)=>(a[1].order||0)-(b[1].order||0));
-  $('#vtabs').innerHTML=`<span class="vtab ${curView==='sugg'?'on':''}" data-v="sugg" title="Easy-win candidates across all FSCs, refreshed with every daily update: commercial or open-sourcing items with a part to buy, little or old procurement history, ranked best first">★ Suggested${SUG.size?` (${SUG.size.toLocaleString()})`:''}</span><span class="vtab ${curView===''?'on':''}" data-v="">All RFQs</span>`+vs.map(([id,v])=>`<span class="vtab ${curView===id?'on':''}" data-v="${esc(id)}">${esc(v.name)} <b data-del="${esc(id)}" title="Delete view">×</b></span>`).join('')+`<span class="vtab" id="vSave" title="Save the current filters as a tab">+ Save view</span>${curView?'<span class="vtab" id="vUpd" title="Overwrite this tab with the current filters">Update view</span>':''}`;
+  $('#vtabs').innerHTML=`<span class="vtab ${curView==='sugg'?'on':''}" data-v="sugg" title="Easy-win candidates, refreshed with every daily update: open RFQs (including past-due ones DIBBS still shows Open) for commercial or open-sourcing items with a part to buy, never procured or not bought in 1+ years, ranked best first">★ Suggested${SUG.size?` (${SUG.size.toLocaleString()})`:''}</span><span class="vtab ${curView===''?'on':''}" data-v="">All RFQs</span>`+vs.map(([id,v])=>`<span class="vtab ${curView===id?'on':''}" data-v="${esc(id)}">${esc(v.name)} <b data-del="${esc(id)}" title="Delete view">×</b></span>`).join('')+`<span class="vtab" id="vSave" title="Save the current filters as a tab">+ Save view</span>${curView?'<span class="vtab" id="vUpd" title="Overwrite this tab with the current filters">Update view</span>':''}`;
 }
 $('#vtabs').onclick=e=>{
   const d=e.target.closest('[data-del]');if(d){const id=d.dataset.del;if(confirm('Delete this view?')){delete CRM.views[id];CRM.deleted['w:'+id]=nowIso();crmSave();if(curView===id)curView='';renderViews()}return}
@@ -744,6 +746,7 @@ function filt(skipFsc){
     const la=hist?lastAw(r):null;
     if(hist==='has'&&!la)return false;
     if(hist==='none'&&(la||!histRead(r)))return false;
+    if(hist==='old1n'&&(la?-daysLeft(la.date)<=365:!histRead(r)))return false;
     if((hist==='old1'||hist==='old2')&&!(la&&-daysLeft(la.date)>(hist==='old1'?365:730)))return false;
     if(hist==='nosame'&&la&&la.same)return false;
     if(hist==='noaswon'&&asWonLast(r))return false;

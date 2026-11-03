@@ -99,6 +99,16 @@ async function main() {
     const e = bySol.get(r[0]) || { file: r[14], nsns: new Set() };
     e.nsns.add(r[1]); bySol.set(r[0], e);
   }
+  // Past-due RFQs that DIBBS still shows Open (data/pastdue.js) get their history read too, after today's open ones.
+  const pastDue = new Set();
+  try {
+    const pt = fs.readFileSync('data/pastdue.js', 'utf8');
+    for (const r of JSON.parse(pt.slice(pt.indexOf('{'), pt.lastIndexOf('}') + 1)).rows || []) {
+      if (!bySol.has(r[0])) { bySol.set(r[0], { file: r[14], nsns: new Set() }); pastDue.add(r[0]); }
+      bySol.get(r[0]).nsns.add(r[1]);
+      rfq.rows.push(r);
+    }
+  } catch {}
   const openNsn = new Set(rfq.rows.map((r) => r[1]));
   const map = loadAll();
   let done = { sols: [], days: [] };
@@ -143,7 +153,9 @@ async function main() {
   // Fallback: open RFQs not read yet, soonest-closing first, one PDF at a time.
   const todo = [...bySol.entries()].filter(([sol]) => !doneSols.has(sol));
   const closing = new Map(rfq.rows.map((r) => [r[0], r[8] || '']));
-  todo.sort((a, b) => (closing.get(a[0]) || '').localeCompare(closing.get(b[0]) || ''));
+  // Today's open RFQs first (soonest closing), then past-due ones still open (newest first).
+  todo.sort((a, b) => (pastDue.has(a[0]) - pastDue.has(b[0])) || (pastDue.has(a[0]) ? (closing.get(b[0]) || '').localeCompare(closing.get(a[0]) || '') : (closing.get(a[0]) || '').localeCompare(closing.get(b[0]) || '')));
+  log(`${todo.length} RFQ PDFs to read (${[...pastDue].filter((s) => !doneSols.has(s)).length} of them past-due but still open)`);
   let n = 0;
   for (const [sol, e] of todo) {
     if (left() < 60e3) break;

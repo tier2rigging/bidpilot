@@ -61,7 +61,7 @@ export function raw(url, { method = 'GET', body, headers = {} } = {}) {
 
 async function consent(warnUrl, html) {
   log('accepting DoD consent on', new URL(warnUrl).host);
-  if (!html) html = (await raw(warnUrl)).body.toString('latin1');
+  for (let i = 0; !html && i < 4; i++) { try { html = (await raw(warnUrl)).body.toString('latin1'); } catch (e) { if (i === 3) throw e; await sleep(5000 * (i + 1)); } }
   const form = new URLSearchParams();
   for (const m of html.matchAll(/<input[^>]*>/gi)) {
     const t = m[0];
@@ -72,15 +72,19 @@ async function consent(warnUrl, html) {
   }
   const action = html.match(/<form[^>]*action="([^"]*)"/i)?.[1];
   const postUrl = action ? new URL(action.replace(/&amp;/g, '&'), warnUrl).href : warnUrl;
-  const res = await raw(postUrl, { method: 'POST', body: form.toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: warnUrl } });
+  let res;
+  for (let i = 0; i < 4; i++) {
+    try { res = await raw(postUrl, { method: 'POST', body: form.toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: warnUrl } }); break; }
+    catch (e) { if (i === 3) throw e; await sleep(5000 * (i + 1)); }
+  }
   if (res.status >= 400) throw new Error(`consent POST failed HTTP ${res.status}`);
 }
 
 export async function get(url, binary = false, attempt = 0) {
   await sleep(300);
   let res;
-  for (let i = 0; i < 3; i++) {
-    try { res = await raw(url); break; } catch (e) { if (i === 2) throw e; await sleep(2000 * (i + 1)); }
+  for (let i = 0; i < 5; i++) {   // DIBBS sometimes drops connections (ECONNRESET): wait and retry
+    try { res = await raw(url); break; } catch (e) { if (i === 4) throw e; await sleep(5000 * (i + 1)); }
   }
   const loc = res.headers.location;
   if (res.status >= 300 && res.status < 400 && loc) {
