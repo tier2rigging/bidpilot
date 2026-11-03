@@ -795,7 +795,9 @@ function renderTable(){
 }
 // "What is this item?" quick lookups (web + images by NSN, item name and approved part numbers)
 function itemLookup(r){
-  const nsn=/^\d{13}$/.test(r[1])?r[1]:'',fn=nsn?fmtNsn(nsn):'',as=(r[15]||[]).slice(0,4);
+  const nsn=/^\d{13}$/.test(r[1])?r[1]:'',fn=nsn?fmtNsn(nsn):'';let as=(r[15]||[]).slice(0,4);
+  const rq=((pipe[key(r)]||{}).req||{items:[]}).items.find(x=>!x.nsn||x.nsn===r[1])||{};
+  if(rq.partPiece&&!as.some(a=>a[1]===rq.partPiece))as=[...as,['spec',rq.partPiece]];
   const name=String(r[4]||'').replace(/\s+/g,' ').trim(), plain=name.includes(',')?name.split(',').slice(1).join(' ').trim()+' '+name.split(',')[0]:name;
   const G=q=>'https://www.google.com/search?q='+encodeURIComponent(q), GI=q=>'https://www.google.com/search?tbm=isch&q='+encodeURIComponent(q);
   const b=(href,txt,tip)=>`<a class="btn" target="_blank" rel="noopener" href="${href}" title="${esc(tip)}" style="font-size:12px;padding:4px 8px">${txt}</a>`;
@@ -803,7 +805,7 @@ function itemLookup(r){
     <div class="small" style="margin-bottom:4px">What is this item? Look it up:</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       ${nsn?b(G(`"${fn}" OR "${nsn}"`),'🔎 NSN','Search the web for this NSN')+b(GI(`"${fn}" ${plain}`),'🖼 NSN images','Pictures of this NSN'):''}
-      ${as.map(([c,pn])=>b(GI(`"${pn}" ${plain}`),'🖼 '+esc(pn),'Pictures of approved part '+pn+' (CAGE '+c+')')).join('')}
+      ${as.map(([c,pn])=>b(GI(`"${pn}" ${plain}`),'🖼 '+esc(pn),(c==='spec'?'Pictures of part '+pn+' (from the RFQ\'s standard/drawing)':'Pictures of approved part '+pn+' (CAGE '+c+')'))).join('')}
       ${b(G(`"${plain}" military`),'🔎 '+esc(plain.toLowerCase()),'What this type of item is')}
     </div>
     <div id="itemCat"></div>
@@ -1091,8 +1093,11 @@ function reqChecklist(res,it){
   if(it.inspection==='DESTINATION')c.push('<b>Destination inspection</b>: the government inspects on receipt. No QAR visit before shipping.');
   if(/0%.*0%/.test(it.qtyVariance||''))c.push('Quantity variance is 0%: ship the exact quantity.');
   if(it.approved.length)c.push(`Offer one of the <b>${it.approved.length} approved part${it.approved.length>1?'s':''}</b> exactly, and keep traceability (manufacturer CoC / distributor invoice).`);
-  if(it.drawing)c.push('Drawing / technical data referenced. Check cFolders before quoting.');
-  if(it.packaging.length)c.push(`<b>Military packaging</b> per ${esc(it.pkgStd||'MIL-STD-2073')} (codes below). Confirm your supplier or a packager can do it, and price it in.`);
+  if(!it.approved.length&&it.partPiece)c.push(`<b>No approved-source list:</b> supply part number <b>${esc(it.partPiece)}</b> made to <b>${esc(it.standard||'the listed standard')}</b>, from any manufacturer that makes it to that standard. Get a certificate of conformance (CoC) showing it meets the standard.${it.partStandard?' Parts made to the current revision, or to the revision current when they were made, are acceptable.':''}`);
+  else if(!it.approved.length&&it.drawings)c.push(`<b>No approved-source list:</b> the item is built to drawing <b>${esc(it.standard||'')}</b>. Get the drawings from cFolders and find a manufacturer who can make it to them.`);
+  else if(it.drawing)c.push('Drawing / technical data referenced. Check cFolders before quoting.');
+  if(it.commercialPkg)c.push('<b>Commercial packaging</b> per ASTM D3951: a normal commercial pack that protects the item in shipping (no military packaging codes). DLA\'s packaging requirements (RP001) take precedence.');
+  else if(it.packaging.length)c.push(`<b>Military packaging</b> per ${esc(it.pkgStd||'MIL-STD-2073')} (codes below). Confirm your supplier or a packager can do it, and price it in.`);
   if(it.marking||res.standards.some(s=>/129/.test(s)))c.push('<b>MIL-STD-129 marking</b>: military shipping label (MSL) with bar codes on each unit, intermediate and exterior container.');
   if(has('252.211-7006'))c.push('<b>RFID required</b> (DFARS 252.211-7006): passive RFID tags on each case and pallet, plus an advance shipment notice in WAWF/PIEE with the tag IDs. Budget for tags and a printer/encoder or a labeling service.');
   else if(it.marking||res.standards.some(s=>/129/.test(s)))c.push('<b>No RFID</b>: this RFQ doesn\'t include the RFID clause (DFARS 252.211-7006). A standard MIL-STD-129 bar-code label is enough. Recheck the award, since a clause added there would change this.');
@@ -1122,10 +1127,11 @@ function reqSheet(res){
       <div>Inspection / acceptance</div><div>${esc(it.inspection||'—')} / ${esc(it.acceptance||'—')}</div>
       <div>Qty variance</div><div>${esc(it.qtyVariance||'—')}</div>
       <div>Approved parts</div><div>${it.approved.length?it.approved.map(([nm,c,p])=>`${esc(nm)} · CAGE ${cageA(c)} · P/N <b>${esc(p)}</b>`).join('<br>'):'—'}</div>
-      ${it.drawing?`<div>Drawing / TDP</div><div>${esc(it.drawing)}</div>`:''}
+      ${it.partPiece?`<div>Part to supply</div><div><b>${esc(it.partPiece)}</b>${it.standard?` <span class="small">per ${esc(it.standard)}</span>`:''}</div>`:''}
+      ${it.drawing?`<div>Drawing / TDP</div><div>${esc(it.drawing).replace(/\n/g,'<br>')}</div>`:''}
     </div>
     <h4 style="margin:10px 0 4px;font-size:13px">Boxing / packaging (${esc(it.pkgStd||'—')})</h4>
-    ${it.packaging.length?`<table class="aw"><tbody>${it.packaging.map(([c,l,v])=>`<tr><td>${esc(l)}<br><span class="small">${esc(c)}</span></td><td><b>${esc(v)}</b></td><td class="small">${esc(pkgMeaning(c,v))}</td></tr>`).join('')}</tbody></table>`:'<div class="small">No packaging codes found.</div>'}
+    ${it.packaging.length?`<table class="aw"><tbody>${it.packaging.map(([c,l,v])=>`<tr><td>${esc(l)}<br><span class="small">${esc(c)}</span></td><td><b>${esc(v)}</b></td><td class="small">${esc(pkgMeaning(c,v))}</td></tr>`).join('')}</tbody></table>`:(it.commercialPkg?'<div class="small">Commercial packaging per ASTM D3951: no military packaging codes on this RFQ.</div>':'<div class="small">No packaging codes found.</div>')}
     <div class="kv" style="margin-top:6px">
       <div>Marking</div><div>${esc(it.marking||'—')}${it.specialMarking?`<br><span class="small">Special marking: ${esc(it.specialMarking)}</span>`:''}</div>
       ${it.packagingNote?`<div>Packaging note</div><div>${esc(it.packagingNote)}</div>`:''}

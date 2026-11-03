@@ -94,10 +94,21 @@
       for (const l of blk) {
         const rc = l.match(/^\s*([RI][A-Z]\d{3}):\s*(.+)$/); if (rc && !/^RA001$/.test(rc[1])) it.reqCodes.push([rc[1], clean(rc[2])]);
         const ap = l.match(/^\s*(.+?)\s+([0-9A-Z]{5})\s+P\/N\s+(\S+)\s*$/); if (ap) it.approved.push([clean(ap[1]), ap[2], ap[3]]);
-        if (/^\s*IAW .*DRAWING|^\s*TDP Rev/i.test(l)) it.drawing = (it.drawing ? it.drawing + ' · ' : '') + clean(l);
+        // Technical data: "IAW BASIC|REFERENCE <doc>", then "REVISION NR x DTD date", then "PART PIECE NUMBER: pn"
+        const iaw = l.match(/^\s*IAW\s+(.+)$/i); if (iaw) (it.drawings = it.drawings || []).push({ doc: clean(iaw[1]) });
+        const last = it.drawings && it.drawings[it.drawings.length - 1];
+        const rv = l.match(/^\s*REVISION NR\s*(.*)$/i); if (rv && last) last.rev = clean(rv[1]);
+        const pp = l.match(/^\s*PART PIECE NUMBER:\s*(\S+)?/i); if (pp && last && pp[1]) { last.piece = pp[1]; it.partPiece = it.partPiece || pp[1]; }
         if (/SHELF LIFE/i.test(l)) it.shelfLife = clean(l);
         if (/Item Unique Identification|IUID/i.test(l)) it.iuid = clean(l + ' ' + (blk[blk.indexOf(l) + 1] || '')).replace(/\s*(THIS MATERIAL.*)$/, '');
       }
+      if (it.drawings) {
+        const seen = new Set(); it.drawings = it.drawings.filter((d) => { const k = d.doc + '|' + (d.rev || '') + '|' + (d.piece || ''); if (seen.has(k)) return false; seen.add(k); return true; });
+        const basic = it.drawings.find((d) => /^BASIC\b/i.test(d.doc)) || it.drawings[0];
+        it.standard = basic.doc.replace(/^BASIC\s+/i, '');
+        it.drawing = it.drawings.map((d) => d.doc + (d.rev ? ` (rev ${d.rev})` : '') + (d.piece ? ` · P/N ${d.piece}` : '')).join('\n');
+      }
+      if (/DEFINED BY EITHER BY A MILITARY PART STANDARD|DEFINED BY (?:EITHER )?A MILITARY PART STANDARD/i.test(txt.replace(/\s+/g, ' '))) it.partStandard = true;
       const sm = txt.match(/SAMPLING:\s*([\s\S]+?)(?:\n\s*\n|Item Unique|THIS MATERIAL|$)/); if (sm) it.sampling = clean(sm[1]).slice(0, 400);
       const clin = txt.match(/^\s*(\d{4})\s+(\d{10})\s+(\d{4})\s+([A-Z]{2})\s+([\d,.]+)/m); if (clin) { it.clin = clin[1]; it.unit = clin[4]; it.qty = +clin[5].replace(/,/g, ''); }
       const g = (re) => { const m = txt.match(re); return m ? clean(m[1]) : ''; };
@@ -112,7 +123,10 @@
         const re = new RegExp('(?:^|\\s)' + code.replace(/[/()]/g, (c) => '\\' + c) + ':\\s*([A-Z0-9]+)');
         const m = pk.match(re); if (m && !(code === 'INTRMDTE CONT' && /QTY/.test(m[0]))) it.packaging.push([code, label, m[1]]);
       }
-      it.marking = g(/(MARKING SHALL BE IN ACCORDANCE WITH [^\n]+)/);
+      it.marking = g(/(MARKING SHALL BE IN ACCORDANCE WITH [^\n]+)/) || g(/(Mark and label all packaging and packing in accordance with [^\n]+)/i);
+      // Commercial packaging RFQs say "PKGING DATA-QUP:001" then "WILL BE PACKAGED IN ACCORDANCE WITH ASTM D3951" instead of MIL-STD-2073 codes
+      const astm = txt.replace(/\s+/g, ' ').match(/PACKAGED IN ACCORDANCE WITH (ASTM D\s?3951)/i);
+      if (astm) { it.commercialPkg = true; if (!it.pkgStd || /^QUP/i.test(it.pkgStd)) it.pkgStd = 'ASTM D3951 (commercial packaging)'; }
       it.specialMarking = g(/SPECIAL MARKING CODE:\s*([^\n]+)/);
       it.palletization = g(/(PALLETIZATION SHALL BE[^\n]+(?:\n[^\n]*REQUIREMENTS FOR PROCUREMENT)?)/);
       const addr = (re, key) => { const i = blk.findIndex((l) => re.test(l)); if (i < 0) return; for (let j = i + 1; j < Math.min(blk.length, i + 14) && it[key].length < 7; j++) { const l = clean(blk[j]); if (!l || /^\*/.test(l)) continue; if (/:/.test(l) || /^(MARKFOR|RDD|VESSEL|PARCEL|BULK|FREIGHT)\b/.test(l) || /SHIPMENT\.|TRANSPORTATION/.test(l)) break; it[key].push(l); if (/^(US|USA)$/.test(l)) break; } };
@@ -147,6 +161,7 @@
       if (it.shipTo.length) o.push('Ship to: ' + it.shipTo.join(', '));
       if (it.tcn) o.push('TCN: ' + it.tcn);
       if (it.transport.length) o.push('Transport: ' + it.transport.join(' / '));
+      if (it.partPiece) o.push(`Part to supply: ${it.partPiece}${it.standard ? ' (' + it.standard + ')' : ''}`);
       if (it.approved.length) o.push('Approved parts: ' + it.approved.map(([n, c, p]) => `${n} ${c} P/N ${p}`).join('; '));
       if (it.reqCodes.length) o.push('Quality/tech requirements: ' + it.reqCodes.map(([c, t]) => `${c} ${t}`).join('; '));
       if (it.iuid) o.push('IUID: ' + it.iuid);
