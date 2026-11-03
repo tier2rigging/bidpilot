@@ -283,7 +283,10 @@ async function main() {
     if (done.has(d)) { log(d, 'already imported'); continue; }
     const f = days.get(d);
     if (!f.in) continue;
-    const recs = parseIndex(await get(f.in), d);
+    // A day DIBBS can't serve right now (not posted yet, consent loop, firewall) is skipped and retried next run.
+    let recs;
+    try { recs = parseIndex(await get(f.in), d); } catch (e) { log(d, 'index file not available yet, will retry next run:', e.message); continue; }
+    let batchOk = !f.bq;
     if (f.bq) {
       try {
         const zip = unzip(await get(f.bq, true));
@@ -295,11 +298,14 @@ async function main() {
         const as = asName ? parseAS(zip.get(asName).toString('latin1')) : new Map();
         for (const r of recs) Object.assign(r, extra.get(`${r.sol}:${r.pr}`) || {}, { as: as.get(r.nsn) || [] });
         log(d, `batch merged, ${as.size} NSNs with approved sources`);
-      } catch (e) { log(d, 'batch file skipped:', e.message); }
+        batchOk = true;
+      } catch (e) { log(d, 'batch file not available, lines kept without batch details; will retry next run:', e.message); }
     }
-    for (const r of recs) byKey.set(`${r.sol}:${r.pr}:${r.nsn}`, toRow(r));
-    done.add(d);
-    log(d, `${recs.length} RFQ lines`);
+    for (const r of recs) { const k = `${r.sol}:${r.pr}:${r.nsn}`, old = byKey.get(k), row = toRow(r);
+      if (!batchOk && old) continue;          // don't overwrite a line that already has batch details
+      byKey.set(k, row); }
+    if (batchOk) done.add(d);                 // days without the batch file are fetched again next run
+    log(d, `${recs.length} RFQ lines${batchOk ? '' : ' (no batch file yet)'}`);
   }
 
   // Keep only RFQs still open (return-by today or later).
