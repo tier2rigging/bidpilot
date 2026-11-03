@@ -80,7 +80,7 @@ async function consent(warnUrl, html) {
   if (res.status >= 400) throw new Error(`consent POST failed HTTP ${res.status}`);
 }
 
-export async function get(url, binary = false, attempt = 0) {
+export async function get(url, binary = false, attempt = 0, waf = 0) {
   await sleep(300);
   let res;
   for (let i = 0; i < 5; i++) {   // DIBBS sometimes drops connections (ECONNRESET): wait and retry
@@ -92,17 +92,25 @@ export async function get(url, binary = false, attempt = 0) {
     if (/dodwarning\.aspx/i.test(next)) {
       if (attempt > 1) throw new Error('consent loop ' + url);
       await consent(next);
-      return get(url, binary, attempt + 1);
+      return get(url, binary, attempt + 1, waf);
     }
-    return get(next, binary, attempt);
+    return get(next, binary, attempt, waf);
   }
   const isHtml = /text\/html/i.test(res.headers['content-type'] || '');
   const text = binary && !isHtml ? '' : res.body.toString('latin1');
-  if (/<title>\s*Request Rejected/i.test(text)) throw new Error('DIBBS WAF rejected ' + url);
+  if (/<title>\s*Request Rejected/i.test(text)) {
+    // DIBBS's firewall sometimes rejects a request; start a fresh session after a pause and try again.
+    if (waf >= 4) throw new Error('DIBBS WAF rejected ' + url);
+    const wait = 60000 * (waf + 1);
+    log(`DIBBS firewall rejected the request; retrying in ${wait / 60000} min (${waf + 1}/4)`);
+    jars.delete(new URL(url).host);
+    await sleep(wait);
+    return get(url, binary, 0, waf + 1);
+  }
   if (/name="butAgree"/.test(text)) {
     if (attempt > 1) throw new Error('consent loop ' + url);
     await consent(url, text);
-    return get(url, binary, attempt + 1);
+    return get(url, binary, attempt + 1, waf);
   }
   if (res.status >= 400) throw new Error(`HTTP ${res.status} ${url}`);
   return binary ? res.body : text;
