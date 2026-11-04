@@ -28,20 +28,26 @@ jobs:
       - name: Install PDF reader
         run: sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
         continue-on-error: true
-      - run: node ingest/fetch.mjs --days ${{ github.event.inputs.days || '5' }}
+      - name: Download today's RFQs from DIBBS
+        id: fetch
+        run: node ingest/fetch.mjs --days ${{ github.event.inputs.days || '5' }}
       - name: Keep past-due RFQs that DIBBS still shows Open
+        if: steps.fetch.outputs.down != 'true'
         timeout-minutes: 35
         run: node ingest/pastdue.mjs --minutes 25 --backfill ${{ github.event.inputs.backfill || '0' }}
         continue-on-error: true
       - name: Read procurement history from RFQ PDFs
+        if: steps.fetch.outputs.down != 'true'
         timeout-minutes: 50
         run: node ingest/history.mjs --minutes 40
         continue-on-error: true
       - name: Collect awards
+        if: steps.fetch.outputs.down != 'true'
         timeout-minutes: 130
         run: node ingest/awards.mjs --days ${{ github.event.inputs.days == '30' && '30' || '7' }} --minutes 110
         continue-on-error: true
       - name: Commit data
+        if: steps.fetch.outputs.down != 'true'
         run: |
           git config user.name "bidpilot-bot"
           git config user.email "actions@users.noreply.github.com"

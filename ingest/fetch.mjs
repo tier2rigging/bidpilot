@@ -334,4 +334,17 @@ async function main() {
   log(`wrote ${rows.length} open RFQ lines to ${OUT}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main().catch((e) => { console.error(e); process.exit(1); });
+// A DIBBS outage (DNS, dropped connections, firewall, 5xx) isn't a BidPilot failure: if the data is less than
+// 24 hours old, end quietly (no failed-run email) and let the next scheduled run try again.
+const OUTAGE = /ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|socket hang up|timeout|WAF rejected|consent loop|HTTP 5\d\d/i;
+function dataAgeHours() { try { const t = fs.readFileSync(OUT, 'utf8'); const u = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)).updated; return (Date.now() - Date.parse(u)) / 3.6e6; } catch { return Infinity; } }
+if (import.meta.url === `file://${process.argv[1]}`) main().catch((e) => {
+  const age = dataAgeHours();
+  if (OUTAGE.test(String(e && (e.code || '') + ' ' + (e.message || e))) && age < 24) {
+    console.log(`::warning::DIBBS unreachable (${e.code || e.message}). Data is ${age.toFixed(1)} h old, so this run ends quietly; the next scheduled run will try again.`);
+    if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'down=true\n');
+    process.exit(0);
+  }
+  if (age >= 24) console.log(`::error::No successful DIBBS update in ${isFinite(age) ? age.toFixed(0) + ' hours' : 'a long time'}.`);
+  console.error(e); process.exit(1);
+});
