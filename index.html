@@ -16,6 +16,7 @@ header h1{font-size:18px;margin:0;letter-spacing:.5px}header h1 b{color:var(--ac
 nav{display:flex;gap:4px;margin-left:auto}nav button{border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600}
 nav button.on{background:var(--acc);border-color:var(--acc);color:#fff}
 main{display:grid;grid-template-columns:280px 1fr;gap:16px;padding:16px;max-width:1600px;margin:0 auto}
+#findView{align-items:start}
 @media (max-width:900px){main{grid-template-columns:1fr}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
 label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mute);margin:10px 0 4px}
@@ -41,7 +42,7 @@ tbody tr{cursor:pointer}tbody tr:hover{background:var(--bg)}
 .fres input{width:auto;margin-top:2px}.fres .ex{color:var(--mute);font-size:11.5px}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#2f6fed;margin-right:6px;vertical-align:middle}
 td.nom{white-space:normal;min-width:160px}
-.tw{overflow-x:auto;overflow-y:visible}
+.tw{overflow:auto}
 .tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700}
 .t-ok{background:var(--okb);color:var(--ok)}.t-warn{background:var(--warnb);color:var(--warn)}.t-acc{background:var(--acc2);color:var(--acc)}
 .bar{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
@@ -880,6 +881,14 @@ function filterBadges(){let total=0;
   const o=$('#fOn');if(o){o.textContent=total?`${total} filter${total>1?'s':''} on`:'No filters on';o.classList.toggle('on',total>0)}}
 (function(){let st={};try{st=JSON.parse(localStorage.getItem('bp_fsec')||'{}')}catch{}
   document.querySelectorAll('details.fgrp').forEach(d=>{const k=d.dataset.sec;if(k in st)d.open=!!st[k];d.addEventListener('toggle',()=>{st[k]=d.open;try{localStorage.setItem('bp_fsec',JSON.stringify(st))}catch{}})})})();
+// The results box ends where the left filter panel ends; extra rows scroll inside it.
+function fitTable(){const v=$('#findView'),tw=v&&v.querySelector('.tw'),aside=v&&v.querySelector('aside'),sec=tw&&tw.closest('section');if(!tw||!aside||!sec||v.classList.contains('hidden'))return;
+  if(getComputedStyle(v).gridTemplateColumns.split(' ').length<2){tw.style.maxHeight='';return}       // one-column (phone) layout: no box
+  tw.style.maxHeight='none';const a=aside.getBoundingClientRect(),t=tw.getBoundingClientRect(),below=sec.getBoundingClientRect().bottom-t.bottom;
+  tw.style.maxHeight=Math.max(420,Math.round(a.bottom-t.top-below))+'px'}
+window.addEventListener('resize',()=>requestAnimationFrame(fitTable));
+document.addEventListener('toggle',e=>{if(e.target.matches&&e.target.matches('details.fgrp'))requestAnimationFrame(fitTable)},true);
+if(window.ResizeObserver)new ResizeObserver(()=>requestAnimationFrame(fitTable)).observe(document.querySelector('#findView aside'));
 function run(){
   try{filterBadges()}catch{}
   if(($('#pdF').value||curView==='sugg')&&!PD_STATE)loadPastDue();
@@ -899,6 +908,7 @@ function renderTable(){
     <td>${SA[r[9]]||r[9]}</td><td>${(()=>{const e=resell(r),h=AMSC_HELP[r[10]||''];return`<span class="tag ${ELIG[e][0]}" title="${esc((r[10]?r[10]+': '+(AMSC[r[10]]||'')+'. ':'No AMSC. ')+ELIG[e][1]+'. '+(h?h[1]:''))}">${r[10]||'–'}</span>${r[18]==='D'?' <span class="tag t-warn" title="Drawing / spec item: tech data (drawings) needed">DWG</span>':''}${secOf(r).map(c=>` <span class="tag ${c==='RD003'?'t-warn':'t-acc'}" title="${esc(c+': '+SEC[c][1])}">${SEC[c][0]}</span>`).join('')}`})()}</td>
     <td>${(r[15]||[]).length===1?`<span class="tag t-warn">${cageA(r[15][0][0])}</span>`:(r[15]||[]).length?`<span class="tag t-warn" title="${esc((r[15]||[]).map(a=>a[0]).join(', '))}: open the RFQ to see each one">${r[15].length} CAGE</span>`:'<span class="tag t-ok">None</span>'}</td><td>${(()=>{const m=lastAw(r);if(!m)return histRead(r)?'<span class="small">never</span>':'';const yrs=-daysLeft(m.date)/365;return `${m.unit>0?'$'+(+m.unit).toFixed(2):''}<br><span class="small ${yrs>=2?'':''}" title="Last procured ${esc(m.date)} by CAGE ${esc(m.cage)}">${esc(m.date.slice(0,7))}${yrs>=2?' · '+Math.floor(yrs)+'y':''}</span>${m.same?' <span class="tag t-warn" title="Same CAGE won the last 3 awards">Same</span>':''}${asWonLast(r)?' <span class="tag t-acc" title="An approved source won the last award">AS won</span>':''}`})()}</td><td>${OD(r[12])}</td><td>${OD(r[16])}</td><td title="${esc((TYPE_HELP[r[11]||'M']||[])[1]||'')}">${TYPE[r[11]]??r[11]}</td><td>${badge(r)}</td></tr>`}).join('')||`<tr><td colspan="15" class="small">${noMatchMsg()}</td></tr>`;
   const pages=Math.max(1,Math.ceil(filtered.length/PER));$('#pg').textContent=`Page ${page+1} of ${pages}`;
+  requestAnimationFrame(fitTable);
 }
 // "What is this item?" quick lookups (web + images by NSN, item name and approved part numbers)
 function itemLookup(r){
