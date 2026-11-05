@@ -1325,17 +1325,26 @@ function supForm(s,after){
 function confirmDel(){return window.confirm?confirm('Delete this supplier?'):true}
 
 // ---------- RFQ emails ----------
-const DEF_TPL={subject1:'RFQ: {item} | NSN {nsn}',subjectN:'RFQ: {count} items | Tier2 Rigging LLC',
-  body:'Hello{contact},\n\nTier2 Rigging LLC (CAGE 175A8) is requesting a quote on the following:\n\n{items}\n\nPlease include:\n- Unit price (and any quantity breaks)\n- Lead time (days ARO)\n- Country of origin\n- Shipping weight and dimensions\n- Quote valid through date\n- Certificate of Conformance / traceability available (Y/N)\n\nThank you,\n{signature}'};
-const tpl=()=>({...DEF_TPL,...(CFG.tpl||{})});
+// RFQ email to suppliers. No solicitation number (it tells the supplier which DLA RFQ you're bidding).
+const DEF_TPL={subject1:'Quote request: {item}{pn}, Qty {qty}',subjectN:'Quote request: {count} items',
+  body:'Hi{contact},\n\nCould you please quote the following?\n\n{items}\n\nPlease include:\n- Unit price, plus any quantity breaks\n- Lead time\n- Country of origin\n- Shipping weight and dimensions\n- How long the quote is valid\n- Whether you can provide a Certificate of Conformance and traceability to the manufacturer\n\nThanks,\n{signature}'};
+const DEF_SIG='Shaun Tierney\nTier2 Rigging LLC · CAGE 175A8\nManorville, NY · 516-902-8843\npurchasing@tier2rigging.com · tier2rigging.com';
+// Earlier built-in wording: a saved copy of it is treated as "default" so it upgrades; a template you edited is kept.
+const OLD_TPL={subject1:'RFQ: {item} | NSN {nsn}',subjectN:'RFQ: {count} items | Tier2 Rigging LLC',body:'Hello{contact},\n\nTier2 Rigging LLC (CAGE 175A8) is requesting a quote on the following:\n\n{items}\n\nPlease include:\n- Unit price (and any quantity breaks)\n- Lead time (days ARO)\n- Country of origin\n- Shipping weight and dimensions\n- Quote valid through date\n- Certificate of Conformance / traceability available (Y/N)\n\nThank you,\n{signature}'};
+const OLD_SIG='Tier2 Rigging LLC\nCAGE: 175A8\nManorville, NY\n516-902-8843\ntier2rigging.com';
+const tpl=()=>{const t={...DEF_TPL};for(const k of ['subject1','subjectN','body']){const v=(CFG.tpl||{})[k];if(v&&v!==OLD_TPL[k])t[k]=v}return t};
+const sig=()=>(CFG.sig===OLD_SIG||!CFG.sig)&&(!SERVER||SERVER.admin)?DEF_SIG:(CFG.sig||'');   // the built-in signature is yours; teammates set their own
 const fillTpl=(t,v)=>t.replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m);
+const firstName=n=>{const w=String(n||'').trim().split(/\s+/)[0]||'';return w?' '+w:''};
+function itemBlock(sup,r){const pn=sup.cage&&(r[15]||[]).find(a=>a[0]===sup.cage)||((r[15]||[]).length===1?r[15][0]:null);
+  return (pn?`- Part: ${pn[1]} (mfr CAGE ${pn[0]}), ${r[4]}`:`- Item: ${r[4]}`)+`\n- NSN: ${fmtNsn(r[1])}\n- Qty: ${r[5]??''} ${r[6]||''}`.trimEnd()}
 function mailBody(sup,rows){
-  const lines=rows.map(r=>{const pn=sup.cage&&(r[15]||[]).find(a=>a[0]===sup.cage);
-    return `- NSN ${fmtNsn(r[1])}${pn?` / P/N ${pn[1]} (CAGE ${sup.cage})`:''}\n  ${r[4]}\n  Qty: ${r[5]??''} ${r[6]||''}${r[13]?` | Delivery required within ${r[13]} days ARO`:''}\n  Ref: ${r[0]}`}).join('\n\n');
-  return fillTpl(tpl().body,{contact:sup.contact?' '+sup.contact:'',items:lines,signature:CFG.sig,count:rows.length,company:sup.name||sup.cage||''});
+  const lines=rows.map(r=>itemBlock(sup,r)).join('\n\n');
+  return fillTpl(tpl().body,{contact:firstName(sup.contact),items:lines,signature:sig(),count:rows.length,company:sup.name||sup.cage||''});
 }
 function mailto(sup,rows){
-  const T=tpl(),subj=rows.length===1?fillTpl(T.subject1,{item:rows[0][4],nsn:fmtNsn(rows[0][1]),sol:rows[0][0]}):fillTpl(T.subjectN,{count:rows.length});
+  const T=tpl(),r0=rows[0],pn=sup.cage&&(r0[15]||[]).find(a=>a[0]===sup.cage)||((r0[15]||[]).length===1?r0[15][0]:null);
+  const subj=rows.length===1?fillTpl(T.subject1,{item:r0[4],nsn:fmtNsn(r0[1]),pn:pn?` (P/N ${pn[1]})`:'',qty:`${r0[5]??''}`,sol:r0[0]}):fillTpl(T.subjectN,{count:rows.length});
   return `mailto:${encodeURIComponent(sup.email)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(mailBody(sup,rows))}`;
 }
 function markRequested(rows,sid){
@@ -1523,13 +1532,13 @@ function cfgForm(){
   <div class="row2"><div><label>Ship-from state</label><input id="qp_fobState" value="${esc(CFG.qp.fobState||'')}"></div><div><label>Ship-from country</label><input id="qp_fobCountry" value="${esc(CFG.qp.fobCountry||'')}"></div></div>
   </details>
   <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">RFQ email template</summary>
-  <div class="small" style="margin:6px 0">Placeholders: <code>{contact}</code> (" Bob", or blank), <code>{items}</code> (the NSN / part / qty list), <code>{signature}</code>, <code>{count}</code>, <code>{company}</code>. One-item subject also takes <code>{item}</code>, <code>{nsn}</code>, <code>{sol}</code>.</div>
+  <div class="small" style="margin:6px 0">Placeholders: <code>{contact}</code> (" David": the contact's first name, or blank), <code>{items}</code> (the NSN / part / qty list), <code>{signature}</code>, <code>{count}</code>, <code>{company}</code>. One-item subject also takes <code>{item}</code>, <code>{pn}</code> (" (P/N …)"), <code>{qty}</code>, <code>{nsn}</code>, <code>{sol}</code>.</div>
   <label>Subject (one item)</label><input id="tS1" value="${esc(tpl().subject1)}">
   <label>Subject (several items)</label><input id="tSN" value="${esc(tpl().subjectN)}">
   <label>Body</label><textarea id="tBody" rows="10">${esc(tpl().body)}</textarea>
   <button class="btn" id="tReset" style="margin-top:6px">Reset to default</button>
   </details>
-  <label>Email signature (used in RFQ drafts)</label><textarea id="cSig" rows="5">${esc(CFG.sig)}</textarea>
+  <label>Email signature (used in RFQ drafts)</label><textarea id="cSig" rows="5">${esc(sig())}</textarea>
   <div style="display:flex;gap:6px;margin-top:10px"><button class="btn p" id="cSave">Save &amp; sync</button><button class="btn" id="cExp">Download backup</button></div>
   <div class="small" id="cMsg" style="margin-top:6px">${esc($('#syncBadge').title||'')}</div>`);
   if(SERVER&&!CAN_CO){document.querySelectorAll('#modalBox [id^="qp_"]').forEach(x=>x.disabled=true);const d=$('#modalBox details');if(d)d.insertAdjacentHTML('beforeend','<div class="small" style="margin-top:6px">Set by your workspace owner. Shared by everyone in '+esc(SERVER.workspace.name)+'.</div>')}
