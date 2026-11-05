@@ -92,6 +92,22 @@ main{gap:16px;padding:16px;max-width:none;grid-template-columns:270px minmax(0,1
 main>section,main>div{min-width:0}
 .card{border-radius:var(--r);box-shadow:var(--shadow);padding:14px}
 aside .card{padding:14px 16px}
+.fbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;position:sticky;top:8px;z-index:3;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.fbar #fOn.on{color:#c8102e;font-weight:700}
+details.fgrp{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+details.fgrp>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:11px 14px;background:linear-gradient(0deg,rgba(29,53,87,.04),rgba(29,53,87,.04));border-left:4px solid #1d3557;user-select:none}
+details.fgrp>summary::-webkit-details-marker{display:none}
+details.fgrp>summary::after{content:'▾';margin-left:auto;color:var(--mut);transition:transform .15s}
+details.fgrp:not([open])>summary::after{transform:rotate(-90deg)}
+details.fgrp[open]>summary{border-bottom:1px solid var(--line)}
+details.fgrp.active>summary{border-left-color:#c8102e}
+.fgi{font-size:16px;width:20px;text-align:center}
+.fgt{font-weight:800;font-size:15px;color:var(--ink);line-height:1.15}
+.fgt small{display:block;font-weight:500;font-size:11.5px;color:var(--mut);margin-top:2px}
+.fgb:empty{display:none}
+.fgb{background:#c8102e;color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:2px 8px;margin-left:4px}
+.fgc{padding:4px 14px 14px}
+.fgc>label:first-child,.fgc>.row2:first-child label{margin-top:8px}
 label{font-size:10.5px;letter-spacing:.06em;color:var(--mute);margin:14px 0 5px}
 input,select,textarea{border-radius:8px;background:var(--card);border-color:var(--line);transition:border-color .12s,box-shadow .12s}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--info);box-shadow:var(--focus)}
@@ -164,13 +180,21 @@ tbody tr:hover td{background:var(--hov)!important}
 
 <main id="findView">
   <aside>
-    <div class="card">
+    <div class="fbar"><span id="fOn" class="small">No filters on</span><button class="btn" id="reset">Reset all</button></div>
+    <details class="fgrp" data-sec="search" open>
+      <summary><span class="fgi">🔎</span><span class="fgt">Search<small>NSN, part number, item</small></span><span class="fgb" data-badge="search"></span></summary>
+      <div class="fgc">
       <label>Search</label>
       <input id="q" placeholder="NSN, solicitation, item name…">
       <div id="lkBox"></div>
       <label>NSN / part number list</label>
       <textarea id="nsnList" rows="2" placeholder="Paste NSNs or part numbers, one per line or comma-separated"></textarea>
       <div class="small" id="nsnListN"></div>
+      </div>
+    </details>
+    <details class="fgrp" data-sec="fsc" open>
+      <summary><span class="fgi">▦</span><span class="fgt">FSCs<small>What you sell</small></span><span class="fgb" data-badge="fsc"></span></summary>
+      <div class="fgc">
       <label>Find FSCs for what you sell</label>
       <div style="display:flex;gap:6px"><input id="fFind" placeholder="e.g. cargo slings, webbing, 1670, 3940"><button class="btn p" id="fFindGo">Find</button></div>
       <div id="fFindOut"></div>
@@ -184,6 +208,11 @@ tbody tr:hover td{background:var(--hov)!important}
       </div>
       <label>Group (FSG)</label>
       <select id="fsg"><option value="">All groups</option></select>
+      </div>
+    </details>
+    <details class="fgrp" data-sec="elig" open>
+      <summary><span class="fgi">✅</span><span class="fgt">Can I bid?<small>Set-aside, sources, tech data, security</small></span><span class="fgb" data-badge="elig"></span></summary>
+      <div class="fgc">
       <label>Set-aside <a href="#" class="cgLink" data-g="sa" title="What the codes mean" style="text-transform:none;font-weight:600">ⓘ what these mean</a></label>
       <div class="sachk" id="saBox"></div>
       <label>Tech data / sources (AMSC) <a href="#" class="cgLink" data-g="amsc" title="What the codes mean" style="text-transform:none;font-weight:600">ⓘ what these mean</a></label>
@@ -196,15 +225,30 @@ tbody tr:hover td{background:var(--hov)!important}
       <select id="asf"><option value="">Any</option><option value="none">None listed (anyone can supply)</option><option value="has">Has approved sources</option></select>
       <label>Approved-source CAGE(s)</label>
       <input id="cage" placeholder="e.g. 1A2B3, 0PMV4">
+      </div>
+    </details>
+    <details class="fgrp" data-sec="hist" open>
+      <summary><span class="fgi">📜</span><span class="fgt">History<small>Past buys, opened RFQs</small></span><span class="fgb" data-badge="hist"></span></summary>
+      <div class="fgc">
       <label style="display:flex;gap:6px;align-items:center;text-transform:none;font-size:13px;font-weight:600;color:var(--ink);margin-top:12px"><input type="checkbox" id="hideSeen" style="width:auto"> Hide RFQs I've opened</label>
       <label>Award history</label>
       <select id="hist"><option value="">Any</option><option value="has">Has procurement history</option><option value="old1n">Not bought in 1+ years, or never</option><option value="old1">Last procured over 1 year ago</option><option value="old2">Last procured over 2 years ago</option><option value="none">Never procured (per RFQ history)</option><option value="nosame">Hide same winner (last 3)</option><option value="noaswon">Hide where approved source won last</option></select>
+      </div>
+    </details>
+    <details class="fgrp" data-sec="ship">
+      <summary><span class="fgi">🚚</span><span class="fgt">Shipping & evaluation<small>FOB, inspection, RFQ type</small></span><span class="fgb" data-badge="ship"></span></summary>
+      <div class="fgc">
       <div class="row2">
         <div><label>FOB</label><select id="fobF"><option value="">Any</option><option value="O">Origin</option><option value="D">Destination</option></select></div>
         <div><label>Insp./Accept.</label><select id="inspF"><option value="">Any</option><option value="O">Origin</option><option value="D">Destination</option></select></div>
       </div>
       <label>RFQ type <a href="#" class="cgLink" data-g="type" title="What the codes mean" style="text-transform:none;font-weight:600">ⓘ what these mean</a></label>
       <select id="type"><option value="">Any</option><option value="F">Fast auto-evaluation</option><option value="P">Auto-evaluation</option><option value="M">Buyer evaluated</option><option value="I">AIDC (long-term contract)</option></select>
+      </div>
+    </details>
+    <details class="fgrp" data-sec="dates">
+      <summary><span class="fgi">⏱</span><span class="fgt">Dates<small>Posted, closing, past due</small></span><span class="fgb" data-badge="dates"></span></summary>
+      <div class="fgc">
       <div class="row2">
         <div><label>Posted within</label><select id="posted"><option value="">Any</option><option value="0">Today</option><option value="2">2 days</option><option value="7">7 days</option></select></div></div>
       <div class="row2">
@@ -212,12 +256,17 @@ tbody tr:hover td{background:var(--hov)!important}
         <div><label>Return-by</label><select id="pdF"><option value="">Still open (not past due)</option><option value="pd">Past due, still Open on DIBBS</option><option value="all">Both</option></select></div>
         <div><label>Min days left</label><select id="minleft"><option value="0">0</option><option value="2">2</option><option value="5">5</option><option value="10">10</option></select></div>
       </div>
+      </div>
+    </details>
+    <details class="fgrp" data-sec="qty">
+      <summary><span class="fgi">#</span><span class="fgt">Quantity<small>Min / max</small></span><span class="fgb" data-badge="qty"></span></summary>
+      <div class="fgc">
       <div class="row2">
         <div><label>Qty min</label><input id="qmin" type="number" min="0"></div>
         <div><label>Qty max</label><input id="qmax" type="number" min="0"></div>
       </div>
-      <div style="margin-top:10px"><button class="btn" id="reset">Reset filters</button></div>
-    </div>
+      </div>
+    </details>
     <div class="card" style="margin-top:12px">
       <label style="margin-top:0">Open RFQs by FSC</label>
       <div class="small">Click to filter. Counts reflect your other filters.</div>
@@ -820,7 +869,19 @@ let PD_STATE=0; // 0 not loaded, 1 loading, 2 loaded
 window.PASTDUE_LOAD=d=>{const have=new Set(D.rows.map(key));let n=0;for(const r of d.rows||[]){if(have.has(key(r)))continue;D.rows.push(r);n++}PD_STATE=2;PD_N=n;refreshWatch();sugRefresh();renderViews();const o=$('#pdF option[value="pd"]');if(o)o.textContent=`Past due, still Open on DIBBS (${n.toLocaleString()})`;run()};
 let PD_N=0;
 function loadPastDue(){if(PD_STATE)return;PD_STATE=1;const s=document.createElement('script');s.src='data/pastdue.js?'+Date.now().toString(36).slice(0,-4);s.onerror=()=>{PD_STATE=2;const o=$('#pdF option[value="pd"]');if(o)o.textContent='Past due (not built yet: runs with the daily job)';run()};document.head.appendChild(s)}
+// Left panel: count active filters per section, remember which sections are open
+const FSECT={search:['q','nsnList'],fsc:['fsg'],elig:['amsc','tdF','secF','asf','cage'],hist:['hist','hideSeen'],ship:['fobF','inspF','type'],dates:['posted','close','pdF','minleft'],qty:['qmin','qmax']};
+const FDEF={minleft:'0'};
+function filterBadges(){let total=0;
+  for(const [sec,ids] of Object.entries(FSECT)){let n=0;
+    for(const id of ids){const el=document.getElementById(id);if(!el)continue;if(el.type==='checkbox'?el.checked:(String(el.value||'').trim()&&String(el.value).trim()!==(FDEF[id]||'')))n++}
+    if(sec==='fsc'&&fscSel.size)n++;if(sec==='elig')n+=document.querySelectorAll('#saBox input:checked').length;
+    total+=n;const b=document.querySelector(`[data-badge="${sec}"]`);if(b){b.textContent=sec==='fsc'&&fscSel.size?`${fscSel.size} FSC${fscSel.size>1?'s':''}`:n?String(n):'';b.closest('details').classList.toggle('active',n>0)}}
+  const o=$('#fOn');if(o){o.textContent=total?`${total} filter${total>1?'s':''} on`:'No filters on';o.classList.toggle('on',total>0)}}
+(function(){let st={};try{st=JSON.parse(localStorage.getItem('bp_fsec')||'{}')}catch{}
+  document.querySelectorAll('details.fgrp').forEach(d=>{const k=d.dataset.sec;if(k in st)d.open=!!st[k];d.addEventListener('toggle',()=>{st[k]=d.open;try{localStorage.setItem('bp_fsec',JSON.stringify(st))}catch{}})})})();
 function run(){
+  try{filterBadges()}catch{}
   if(($('#pdF').value||curView==='sugg')&&!PD_STATE)loadPastDue();
   filtered=filt(false);
   if(curView==='sugg'){filtered=filtered.filter(r=>SUG.has(key(r)));filtered.sort((a,b)=>SUG.get(key(b)).sc-SUG.get(key(a)).sc||(a[8]||'').localeCompare(b[8]||''))}
