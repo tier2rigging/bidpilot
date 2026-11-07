@@ -169,6 +169,40 @@ tbody tr:hover td{background:var(--hov)!important}
 @media (max-width:1700px){main{grid-template-columns:240px minmax(0,1fr)}#findView thead th:nth-child(14),#tb td:nth-child(14){display:none}#tb td.nom{width:170px;max-width:170px;min-width:150px}#findView th,#findView td{padding-left:6px;padding-right:6px}}
 ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#c9d0da;border-radius:8px;border:2px solid var(--bg)}::-webkit-scrollbar-track{background:transparent}
 @media (prefers-color-scheme:dark){::-webkit-scrollbar-thumb{background:#333b48}}
+
+/* ---- Phone layout ---- */
+#fToggle{display:none}
+@media (max-width:760px){
+  header{padding:8px 12px;gap:6px 8px}
+  header .brand h1{font-size:17px}header .brand .tag{display:none}
+  header .meta{font-size:11px;width:100%;order:1}
+  header .btn{padding:5px 9px;font-size:13px}
+  header nav{margin-left:0;width:100%;order:2}header nav button{flex:1}
+  main,#findView,#pipeView{grid-template-columns:minmax(0,1fr)!important;padding:10px;gap:10px}
+  #findView aside .fgrp,#findView aside .fside{display:none}
+  #findView aside.mopen .fgrp,#findView aside.mopen .fside{display:block}
+  #fToggle{display:inline-flex}
+  .fbar{position:static;padding:6px 10px;margin-bottom:0}
+  #findView section.card{padding:10px}
+  .vtabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+  .vtab{white-space:nowrap;flex:none;font-size:12.5px;padding:4px 10px}
+  #findView .bar{flex-wrap:wrap;gap:6px}#findView .bar>span{display:flex;flex-wrap:wrap;gap:6px}
+  #findView .bar .btn{font-size:12.5px;padding:5px 9px}
+  #findView .tw{overflow:visible}
+  #findView table{min-width:0!important;width:100%}
+  #findView thead{display:none}
+  #tb tr{display:grid;grid-template-columns:26px minmax(0,1fr) auto;grid-template-areas:"c n q" "c s k" "c r a" "c t l";gap:2px 8px;padding:10px 4px;border-bottom:1px solid var(--line)}
+  #tb td{display:block;padding:0!important;border:0!important;width:auto!important;min-width:0!important;max-width:none!important;font-size:13px;background:none}
+  #tb td:nth-child(1){grid-area:c}#tb td:nth-child(2){grid-area:r}#tb td:nth-child(3){grid-area:s}#tb td:nth-child(4){grid-area:k;text-align:right}
+  #tb td:nth-child(5){grid-area:n;font-weight:600}#tb td:nth-child(7){grid-area:q;text-align:right;white-space:nowrap;font-weight:600}
+  #tb td:nth-child(8){grid-area:a;text-align:right}#tb td:nth-child(9){grid-area:t}#tb td:nth-child(11){grid-area:l;text-align:right}
+  #tb td:nth-child(11) br{display:none}#tb td:nth-child(11) .small{margin-left:6px}#tb td:nth-child(2){white-space:nowrap}
+  #tb td:nth-child(6),#tb td:nth-child(10),#tb td:nth-child(12),#tb td:nth-child(13),#tb td:nth-child(14),#tb td:nth-child(15){display:none!important}
+  #tb td[colspan]{grid-column:1/-1}
+  #tb tr.cur{box-shadow:inset 3px 0 0 var(--acc)}#tb tr.cur td{background:none}#tb tr.cur{background:#fff1bf}
+  #drawer{padding:14px 14px 40px}
+}
+@media (max-width:760px) and (prefers-color-scheme:dark){#tb tr.cur{background:#3a3112}}
 </style>
 </head>
 <body>
@@ -181,7 +215,7 @@ tbody tr:hover td{background:var(--hov)!important}
 
 <main id="findView">
   <aside>
-    <div class="fbar"><span id="fOn" class="small">No filters on</span><button class="btn" id="reset">Reset all</button></div>
+    <div class="fbar"><button class="btn" id="fToggle" aria-expanded="false">☰ Filters</button><span id="fOn" class="small">No filters on</span><button class="btn" id="reset">Reset all</button></div>
     <details class="fgrp" data-sec="search" open>
       <summary><span class="fgi">🔎</span><span class="fgt">Search<small>NSN, part number, item</small></span><span class="fgb" data-badge="search"></span></summary>
       <div class="fgc">
@@ -268,7 +302,7 @@ tbody tr:hover td{background:var(--hov)!important}
       </div>
       </div>
     </details>
-    <div class="card" style="margin-top:12px">
+    <div class="card fside" style="margin-top:12px">
       <label style="margin-top:0">Open RFQs by FSC</label>
       <div class="small">Click to filter. Counts reflect your other filters.</div>
       <div class="fsclist" id="fscList"></div>
@@ -883,9 +917,10 @@ function filterBadges(){let total=0;
   document.querySelectorAll('details.fgrp').forEach(d=>{const k=d.dataset.sec;if(k in st)d.open=!!st[k];d.addEventListener('toggle',()=>{st[k]=d.open;try{localStorage.setItem('bp_fsec',JSON.stringify(st))}catch{}})})})();
 // Results page size: as many rows as fit beside the left filter panel (no inner scroll), with Prev/Next for the rest.
 let FIT_DIRTY=true;
+document.addEventListener('click',e=>{if(e.target.closest('#fToggle')){const a=$('#findView aside'),o=a.classList.toggle('mopen');e.target.closest('#fToggle').setAttribute('aria-expanded',o);e.target.closest('#fToggle').textContent=o?'✕ Hide filters':'☰ Filters'}});
 function fitTable(){const v=$('#findView'),tw=v&&v.querySelector('.tw'),aside=v&&v.querySelector('aside'),sec=tw&&tw.closest('section'),tb=$('#tb');
   if(!tw||!aside||!sec||!tb||v.classList.contains('hidden'))return;FIT_DIRTY=false;
-  let n=100;
+  let n=matchMedia('(max-width:760px)').matches?25:100;
   if(getComputedStyle(v).gridTemplateColumns.split(' ').length>=2){            // side-by-side layout (not phone)
     const trs=tb.querySelectorAll('tr');if(trs.length<2||trs[0].querySelector('td[colspan]'))return;
     const tbr=tb.getBoundingClientRect(),avg=tbr.height/trs.length,below=sec.getBoundingClientRect().bottom-tw.getBoundingClientRect().bottom;
