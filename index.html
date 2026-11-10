@@ -210,7 +210,7 @@ tbody tr:hover td{background:var(--hov)!important}
   <div class="brand"><div><h1>BID<b>PILOT</b></h1><div class="tag">Government Contracting Intelligence</div></div></div>
   <span class="meta" id="meta"></span>
   <span class="small" id="wsBadge" style="display:none"></span><button class="btn" id="admBtn" style="display:none" title="Users, workspaces and lock-outs">👤 Admin</button> <span class="sync" id="syncBadge" title="Sync settings">Local only</span><button class="btn" id="watchBtn" title="Watchlist: NSNs you want to know about when they come up for bid">🔔 <span id="watchN"></span></button> <button class="btn" id="rdBtn" title="Pull the requirements out of an RFQ PDF">📄 Read RFQ</button> <button class="btn" id="cfgBtn" title="Settings">⚙ Settings</button>
-  <nav><button id="tabFind" class="on" title="Find and filter solicitations">Discover</button><button id="tabPipe" title="Bids, suppliers, and orders">Manage <span id="pipeCount"></span></button></nav>
+  <nav><button id="tabFind" class="on" title="Find and filter solicitations">Discover</button><button id="tabPipe" title="Bids, suppliers, and orders">Manage <span id="pipeCount"></span> <span id="ordNewTop"></span></button></nav>
 </header>
 
 <main id="findView">
@@ -519,9 +519,9 @@ CFG.qp=Object.assign({cage:'175A8',disc:'1',mfg:'DD',fobCity:'Manorville',fobSta
 if(!Array.isArray(CFG.myfsc))CFG.myfsc=store.get('t2_myfsc',[])||[];
 let CRM=store.get('bp_crm',null)||{pipeline:store.get('t2_pipe',{}),suppliers:{},deleted:{}};
 CRM.pipeline=CRM.pipeline||{};CRM.suppliers=CRM.suppliers||{};CRM.orders=CRM.orders||{};CRM.viewed=CRM.viewed||{};CRM.views=CRM.views||{};CRM.watch=CRM.watch||{};CRM.deleted=CRM.deleted||{};
-const pickSettings=()=>({saved:CFG.settingsSaved||'',sig:CFG.sig,tpl:CFG.tpl,mtarget:CFG.mtarget,qp:{...CFG.qp},myfsc:[...(CFG.myfsc||[])]});
+const pickSettings=()=>({saved:CFG.settingsSaved||'',sig:CFG.sig,tpl:CFG.tpl,poBuyer:CFG.poBuyer,mtarget:CFG.mtarget,qp:{...CFG.qp},myfsc:[...(CFG.myfsc||[])]});
 if(!CRM.settings)CRM.settings=pickSettings();
-function applySettings(){const st=CRM.settings;if(!st||!st.saved||(st.saved<=(CFG.settingsSaved||'')))return;if(st.sig!=null)CFG.sig=st.sig;if(st.tpl)CFG.tpl=st.tpl;if(st.mtarget)CFG.mtarget=st.mtarget;if(st.qp)CFG.qp=Object.assign({},CFG.qp,st.qp);if(Array.isArray(st.myfsc))try{const had=CFG.myfsc||[];CFG.myfsc=st.myfsc;if(typeof fscSel!=='undefined'&&(!fscSel.size||canon([...fscSel].sort())===canon([...had].sort()))){fscSel=new Set(CFG.myfsc);chips();run()}}catch{}CFG.settingsSaved=st.saved;store.set('bp_cfg',CFG)}
+function applySettings(){const st=CRM.settings;if(!st||!st.saved||(st.saved<=(CFG.settingsSaved||'')))return;if(st.sig!=null)CFG.sig=st.sig;if(st.poBuyer!=null)CFG.poBuyer=st.poBuyer;if(st.tpl)CFG.tpl=st.tpl;if(st.mtarget)CFG.mtarget=st.mtarget;if(st.qp)CFG.qp=Object.assign({},CFG.qp,st.qp);if(Array.isArray(st.myfsc))try{const had=CFG.myfsc||[];CFG.myfsc=st.myfsc;if(typeof fscSel!=='undefined'&&(!fscSel.size||canon([...fscSel].sort())===canon([...had].sort()))){fscSel=new Set(CFG.myfsc);chips();run()}}catch{}CFG.settingsSaved=st.saved;store.set('bp_cfg',CFG)}
 let pipe=CRM.pipeline;
 const nowIso=()=>new Date().toISOString();
 function canon(o){return JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v)}
@@ -1508,21 +1508,26 @@ $('#bulkMail').onclick=()=>{
 const MY0=window.MY_AWARDS||{rows:[],cages:['175A8']};
 const MY={get rows(){return isHomeWs()||(MY0.cages||[]).includes(String(CFG.qp.cage||'').toUpperCase())?(MY0.rows||[]):[]},get cages(){return isHomeWs()?(MY0.cages||[]):[String(CFG.qp.cage||'').toUpperCase()].filter(Boolean)},get updated(){return MY0.updated}};
 const OSTAT=['Awarded','PO sent to supplier','Received from supplier','Shipped to DLA','Invoiced (WAWF)','Paid','Cancelled'];
-const ordId=a=>`${a[0]}|${a[1]||''}`;
+const cid=s=>String(s||'').split(/\s*(?:&raquo;|»)/)[0].trim();
+const ordId=a=>`${cid(a[0])}|${cid(a[1])}`;
 function allOrders(){
   const out={};
-  for(const a of MY.rows||[]){const id=ordId(a);out[id]={id,auto:true,contract:a[0],order:a[1],awardDate:a[6],nsn:a[8],nom:a[9],pr:a[10],qty:a[13],ui:a[14],unit:a[15]>0?a[15]:null,total:a[5],pdf:a[12],mod:a[3],due:a[16]||'',cnt:a[2],status:'Awarded',...(CRM.orders[id]||{})}}
+  for(const old of Object.keys(CRM.orders))if(/»|&raquo;/.test(old)){const nid=old.split('|').map(cid).join('|');if(!CRM.orders[nid])CRM.orders[nid]=CRM.orders[old];delete CRM.orders[old];CRM.deleted['o:'+old]=nowIso()}
+  for(const a of MY.rows||[]){const id=ordId(a);out[id]={id,auto:true,contract:cid(a[0]),order:cid(a[1]),sol:a[11],awardDate:a[6],nsn:a[8],nom:a[9],pr:a[10],qty:a[13],ui:a[14],unit:a[15]>0?a[15]:null,total:a[5],pdf:a[12],mod:a[3],due:a[16]||'',cnt:a[2],status:'Awarded',...(CRM.orders[id]||{})}}
   for(const[id,o]of Object.entries(CRM.orders))if(!out[id])out[id]={id,status:'Awarded',...o};
   return Object.values(out);
 }
 const ordOpen=o=>!['Paid','Cancelled'].includes(o.status);
 const shippedOrLater=o=>['Shipped to DLA','Invoiced (WAWF)','Paid'].includes(o.status);
 function dueTag(o){if(!o.due)return '<span class="small">set due date</span>';const d=daysLeft(o.due);if(shippedOrLater(o))return o.due;return `${o.due} <span class="tag ${d<0?'t-acc':d<=10?'t-warn':'t-ok'}">${d<0?Math.abs(d)+'d late':d+'d'}</span>`}
-function ordBadge(){const n=allOrders().filter(o=>ordOpen(o)&&!shippedOrLater(o)&&o.due&&daysLeft(o.due)<=10).length;$('#ordBadge').innerHTML=n?`<span class="tag t-warn">${n} due soon</span>`:''}
+const isNewOrd=o=>o.auto&&!CRM.orders[o.id];
+function ordBadge(){const all=allOrders(),n=all.filter(o=>ordOpen(o)&&!shippedOrLater(o)&&o.due&&daysLeft(o.due)<=10).length,nw=all.filter(isNewOrd).length;
+  $('#ordBadge').innerHTML=(nw?`<span class="tag t-ok">${nw} new</span> `:'')+(n?`<span class="tag t-warn">${n} due soon</span>`:'');
+  $('#ordNewTop').innerHTML=nw?`<span class="tag t-ok" title="New award to your CAGE: open Manage → Orders">🏆 ${nw} new award${nw>1?'s':''}</span>`:''}
 function renderOrd(){
   const show=$('#ordDone').checked,list=allOrders().filter(o=>show||ordOpen(o)).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'));
   $('#ordNote').textContent=`Awards to CAGE ${(MY.cages||[]).join(', ')} are added here automatically from the daily award collection${MY.updated?' (last checked '+new Date(MY.updated).toLocaleDateString()+')':''}. Due dates come from the award PDF. Check each one against the contract.`;
-  $('#ob').innerHTML=list.map(o=>`<tr data-id="${esc(o.id)}"><td><span class="tag t-acc">${esc(o.status)}</span>${o.mod?` <span class="tag t-warn" title="Mod posted ${esc(o.mod)}">MOD</span>`:''}</td><td>${dueTag(o)}</td><td>${esc(o.awardDate||'')}</td>
+  $('#ob').innerHTML=list.map(o=>`<tr data-id="${esc(o.id)}"><td>${isNewOrd(o)?'<span class="tag t-ok">NEW</span> ':''}<span class="tag t-acc">${esc(o.status)}</span>${o.mod?` <span class="tag t-warn" title="Mod posted ${esc(o.mod)}">MOD</span>`:''}</td><td>${dueTag(o)}</td><td>${esc(o.awardDate||'')}</td>
     <td>${o.pdf?`<a target="_blank" rel="noopener" href="${esc(o.pdf)}">${esc(o.order||o.contract)}</a>`:esc(o.order||o.contract||'')}</td><td>${fmtNsn(o.nsn||'')}</td><td class="nom">${esc(o.nom||'')}</td><td>${o.qty??''} ${esc(o.ui||'')}</td><td>${o.unit!=null?'$'+(+o.unit).toFixed(2):''}</td><td>${o.total!=null?'$'+(+o.total).toLocaleString(undefined,{minimumFractionDigits:2}):''}</td>
     <td>${esc(o.supplier||'')}</td><td>${esc(o.po||'')}</td><td>${esc(o.shipDate||'')}</td></tr>`).join('')||'<tr><td colspan="12" class="small">No orders yet. When DLA awards one to your CAGE, it shows up here automatically.</td></tr>';
   ordBadge();
@@ -1532,6 +1537,7 @@ $('#ob').onclick=e=>{if(e.target.closest('a'))return;const tr=e.target.closest('
 $('#ordAdd').onclick=()=>ordForm({id:'m'+Date.now().toString(36),status:'Awarded',manual:true});
 $('#ordCsv').onclick=()=>csv(allOrders().map(o=>[o.status,o.due,o.awardDate,o.contract,o.order,fmtNsn(o.nsn||''),o.nom,o.qty,o.unit,o.total,o.supplier,o.po,o.supCost,o.shipDate,o.tracking,o.invoice,o.paidDate,o.notes]),['Status','Due','Awarded','Contract','Order','NSN','Item','Qty','Unit $','Total $','Supplier','Supplier PO','Supplier cost $','Shipped','Tracking','Invoice/WAWF','Paid','Notes']);
 function ordForm(o){
+  if(isNewOrd(o)){CRM.orders[o.id]={seen:nowIso(),saved:nowIso()};crmSave();renderOrd()}
   const f=(id,l,v,t='text')=>`<div><label>${l}</label><input id="${id}" type="${t}" value="${esc(v??'')}"></div>`;
   const d=o.due?daysLeft(o.due):null,warn=o.due&&!shippedOrLater(o)&&ordOpen(o)&&d<=10;
   modal(`<div class="bar"><strong>${esc(o.order||o.contract||'New order')}</strong><button class="btn" id="mX">✕</button></div>
@@ -1546,7 +1552,7 @@ function ordForm(o){
   <div class="row2">${f('oInv','Invoice / WAWF #',o.invoice)}${f('oPaid','Paid (date)',o.paidDate,'date')}</div>
   <label>Notes</label><textarea id="oNotes" rows="3">${esc(o.notes||'')}</textarea><div class="small" style="margin-top:2px">Don't store passwords, bank or tax info here.</div>
   ${o.total&&o.supCost?`<div class="small" style="margin-top:6px">Gross profit: $${(o.total-o.supCost).toFixed(2)} (${((o.total-o.supCost)/o.total*100).toFixed(1)}%)</div>`:''}
-  <div style="display:flex;justify-content:space-between;margin-top:10px"><button class="btn p" id="oSave">Save</button>${o.manual||(!o.auto&&CRM.orders[o.id])?'<button class="btn" id="oDel">Delete</button>':''}</div>`);
+  <div style="display:flex;justify-content:space-between;margin-top:10px"><span><button class="btn p" id="oSave">Save</button> <button class="btn" id="oPo">📄 ${o.poData?'Open PO':'Create PO'}</button></span>${o.manual||(!o.auto&&CRM.orders[o.id])?'<button class="btn" id="oDel">Delete</button>':''}</div>`);
   $('#mX').onclick=closeModal;
   const v=id=>$(id)?$(id).value.trim():undefined,nv=id=>{const x=v(id);return x===''||x===undefined?null:+x};
   $('#oSave').onclick=()=>{
@@ -1554,7 +1560,112 @@ function ordForm(o){
     if(!o.auto)Object.assign(rec,{manual:true,contract:v('#oCon'),order:v('#oOrd'),nsn:(v('#oNsn')||'').replace(/-/g,''),nom:v('#oNom'),qty:nv('#oQty'),unit:nv('#oUnit'),awardDate:v('#oAw'),total:nv('#oQty')!=null&&nv('#oUnit')!=null?nv('#oQty')*nv('#oUnit'):null});
     CRM.orders[o.id]=rec;crmSave();closeModal();renderOrd();
   };
+  $('#oPo').onclick=()=>{$('#oSave').onclick();poForm(allOrders().find(x=>x.id===o.id)||o)};
   if($('#oDel'))$('#oDel').onclick=()=>{delete CRM.orders[o.id];CRM.deleted['o:'+o.id]=nowIso();crmSave();closeModal();renderOrd()};
+}
+// ---------- purchase orders to suppliers ----------
+const PO_BUYER_DEFAULT='Tier2 Rigging LLC\n6 Calendar Rd\nManorville, NY 11949-2062\nCAGE 175A8\npurchasing@tier2rigging.com · 516-902-8843';
+const PO_SHIPTO_DEFAULT='Tier2 Rigging LLC\n6 Calendar Rd\nManorville, NY 11949-2062\nAttn: Receiving';
+const DPAS_TXT=r=>`This is a rated order certified for national defense use, and you are required to follow all the provisions of the Defense Priorities and Allocations System regulation (15 CFR part 700). DPAS rating: ${r}.`;
+const PO_REQS=[
+  ['coc','Certificate of Conformance required with shipment, signed, referencing this PO and the part number, with lot or batch traceability to the manufacturer.'],
+  ['trace','Supplier shall keep supply-chain traceability records (manufacturer, lot, invoices) and provide them on request. Government end use: DLA prime contract listed above.'],
+  ['new','Material shall be new, unused, and not refurbished, surplus or counterfeit; exactly the part number ordered, no substitutions without written approval.'],
+  ['pkg','Commercial packaging is acceptable; Tier2 Rigging performs military packaging and marking. Mark each package with this PO number and part number.'],
+  ['us','Country of origin must be shown on the C of C or packing list.'],
+  ['ack','Please confirm receipt of this PO with your ship date within 2 business days.'],
+];
+const fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}):'';
+const addDays=(iso,n)=>{if(!iso)return '';const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};
+function poDefaults(o){
+  const pp=Object.values(pipe).find(p=>p.row&&o.pr&&p.row[2]===o.pr)||{};
+  const [offC,offP]=(pp.bqOffer||'').split('|');
+  const supName=o.supplier||pp.vendor||'';
+  const sp=sups().find(s=>supName&&(s.name===supName||s.cage===supName))||(offC&&sups().find(s=>s.cage===offC))||{};
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
+  const qty=o.qty??pp.row?.[5]??'';
+  const unit=o.supCost&&qty?+(o.supCost/qty).toFixed(2):(pp.cost??'');
+  return {poNum:o.po||`T2R-${today.replace(/-/g,'').slice(2)}-${String(o.order||o.contract||'').slice(-4)}`,date:today,
+    supplier:sp.name||supName||'',supCage:sp.cage||offC||'',supContact:sp.contact||'',supEmail:sp.email||'',supPhone:sp.phone||'',supAddr:'',quoteRef:'',
+    pn:offP||'',mfrCage:offC||sp.cage||'',desc:o.nom||'',nsn:fmtNsn(o.nsn||''),qty,ui:o.ui||'EA',unit,
+    reqDate:o.due?addDays(o.due,-21):'',shipTo:PO_SHIPTO_DEFAULT,shipVia:'Best way, prepaid and add to invoice',terms:'Net 30',
+    dpas:'',prime:[o.contract,o.order].filter(Boolean).join(' / '),notes:'',reqs:Object.fromEntries(PO_REQS.map(([k])=>[k,true]))};
+}
+function poForm(o){
+  const d={...poDefaults(o),...(o.poData||{})};d.reqs={...poDefaults(o).reqs,...(d.reqs||{})};
+  const f=(id,l,v,t='text',ph='')=>`<div><label>${l}</label><input id="${id}" type="${t}" value="${esc(v??'')}" placeholder="${esc(ph)}"></div>`;
+  const ta=(id,l,v,rows=3)=>`<div><label>${l}</label><textarea id="${id}" rows="${rows}">${esc(v??'')}</textarea></div>`;
+  const supOpts=sups().map(s=>`<option value="${esc(s.id)}">${esc(s.name||s.cage)}</option>`).join('');
+  modal(`<div class="bar"><strong>Purchase order · ${esc(o.order||o.contract||'')}</strong><button class="btn" id="mX">✕</button></div>
+  <div class="row2">${f('pqNum','PO #',d.poNum)}${f('pqDate','PO date',d.date,'date')}</div>
+  <label>Supplier</label><div class="row2" style="grid-template-columns:2fr 1fr"><input id="pqSup" value="${esc(d.supplier)}" placeholder="Company name"><select id="pqPick"><option value="">Fill from Suppliers…</option>${supOpts}</select></div>
+  <div class="row2">${f('pqCage','Supplier CAGE',d.supCage)}${f('pqCon','Attn',d.supContact)}</div>
+  <div class="row2">${f('pqEm','Supplier email',d.supEmail,'email')}${f('pqPh','Supplier phone',d.supPhone)}</div>
+  ${ta('pqAddr','Supplier address',d.supAddr,2)}
+  ${f('pqQref','Supplier quote #',d.quoteRef,'text','e.g. Q-12345')}
+  <div class="row2">${f('pqPn','Part number',d.pn,'text','e.g. CTT2-96 X100')}${f('pqMfr','Manufacturer CAGE',d.mfrCage)}</div>
+  <div class="row2">${f('pqDesc','Description',d.desc)}${f('pqNsn','NSN (reference)',d.nsn)}</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">${f('pqQty','Qty',d.qty,'number')}${f('pqUi','Unit',d.ui)}${f('pqUnit','Unit cost $',d.unit,'number')}</div>
+  <div class="small" id="pqTot" style="margin-top:4px"></div>
+  <div class="row2">${f('pqReq','Required at Tier2 by',d.reqDate,'date')}${f('pqTerms','Payment terms',d.terms)}</div>
+  ${f('pqVia','Ship via / freight',d.shipVia)}
+  ${ta('pqShip','Ship to',d.shipTo,3)}
+  <div class="row2">${f('pqDpas','DPAS rating (award Block 5)',d.dpas,'text','e.g. DO-C9')}${f('pqPrime','DLA prime contract',d.prime)}</div>
+  <label>Requirements on the PO</label>${PO_REQS.map(([k,t])=>`<label class="small" style="display:flex;gap:6px;align-items:flex-start;font-weight:400"><input type="checkbox" id="pqR_${k}" style="width:auto;margin-top:2px" ${d.reqs[k]?'checked':''}> ${esc(t)}</label>`).join('')}
+  ${ta('pqNotes','Other notes to supplier',d.notes,2)}
+  <details style="margin-top:6px"><summary class="small">Your company block (on every PO)</summary>${ta('pqBuyer','',CFG.poBuyer||PO_BUYER_DEFAULT,5)}</details>
+  <div style="display:flex;gap:6px;justify-content:space-between;margin-top:10px;flex-wrap:wrap"><span><button class="btn p" id="pqPrint">Print / Save PDF</button> <a class="btn" id="pqMail" href="#">Email draft</a></span><button class="btn" id="pqSave">Save</button></div>
+  <div class="small" style="margin-top:4px">Save the PDF, then attach it to the email draft. Pick your purchasing@ address in the From box before sending.</div>`);
+  $('#modalBox').classList.add('wide');
+  $('#mX').onclick=closeModal;
+  const v=id=>$(id).value.trim();
+  const read=()=>({poNum:v('#pqNum'),date:v('#pqDate'),supplier:v('#pqSup'),supCage:v('#pqCage').toUpperCase(),supContact:v('#pqCon'),supEmail:v('#pqEm'),supPhone:v('#pqPh'),supAddr:$('#pqAddr').value.trim(),quoteRef:v('#pqQref'),
+    pn:v('#pqPn'),mfrCage:v('#pqMfr').toUpperCase(),desc:v('#pqDesc'),nsn:v('#pqNsn'),qty:v('#pqQty')===''?'':+v('#pqQty'),ui:v('#pqUi'),unit:v('#pqUnit')===''?'':+v('#pqUnit'),
+    reqDate:v('#pqReq'),terms:v('#pqTerms'),shipVia:v('#pqVia'),shipTo:$('#pqShip').value.trim(),dpas:v('#pqDpas').toUpperCase(),prime:v('#pqPrime'),notes:$('#pqNotes').value.trim(),
+    reqs:Object.fromEntries(PO_REQS.map(([k])=>[k,$('#pqR_'+k).checked]))});
+  const tot=()=>{const x=read();const t=x.qty&&x.unit?x.qty*x.unit:null;$('#pqTot').textContent=t!=null?`PO total: $${t.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}${o.total?` · DLA pays $${(+o.total).toLocaleString(undefined,{minimumFractionDigits:2})} · gross $${(o.total-t).toFixed(2)} (${((o.total-t)/o.total*100).toFixed(1)}%)`:''}`:'';return t};
+  ['#pqQty','#pqUnit'].forEach(id=>$(id).oninput=tot);tot();
+  $('#pqPick').onchange=()=>{const s=CRM.suppliers[$('#pqPick').value];if(!s)return;$('#pqSup').value=s.name||'';$('#pqCage').value=s.cage||'';$('#pqCon').value=s.contact||'';$('#pqEm').value=s.email||'';$('#pqPh').value=s.phone||'';if(!$('#pqMfr').value)$('#pqMfr').value=s.cage||''};
+  const save=(extra={})=>{const x=read(),t=x.qty&&x.unit?+(x.qty*x.unit).toFixed(2):null;
+    const buyer=$('#pqBuyer').value.trim();if(buyer&&buyer!==(CFG.poBuyer||PO_BUYER_DEFAULT)){CFG.poBuyer=buyer;CFG.settingsSaved=nowIso();CRM.settings=pickSettings();store.set('bp_cfg',CFG)}
+    CRM.orders[o.id]={...(CRM.orders[o.id]||{}),poData:x,po:x.poNum,supplier:x.supplier,...(t!=null?{supCost:t}:{}),...extra,saved:nowIso()};crmSave();renderOrd();return x};
+  $('#pqSave').onclick=()=>{save();closeModal();ordForm(allOrders().find(z=>z.id===o.id))};
+  $('#pqPrint').onclick=()=>{const x=save();const w=window.open('','_blank');if(!w){alert('Allow pop-ups for BidPilot to print the PO.');return}w.document.write(poHtml(x,o));w.document.close();w.focus();setTimeout(()=>w.print(),300)};
+  $('#pqMail').onclick=e=>{const x=save(),cur=CRM.orders[o.id];if(!x.supEmail){e.preventDefault();alert('Add the supplier email first.');return}
+    if(!cur.status||cur.status==='Awarded'){cur.status='PO sent to supplier';cur.saved=nowIso();crmSave();renderOrd()}
+    const t=x.qty&&x.unit?x.qty*x.unit:null;
+    const body=[`${x.supContact?'Hi '+x.supContact.split(' ')[0]+',':'Hello,'}`,'',`Please see attached purchase order ${x.poNum}${x.quoteRef?' against your quote '+x.quoteRef:''}:`,'',
+      `  ${x.qty} ${x.ui}  P/N ${x.pn||'(see PO)'}  ${x.desc}`,x.unit!==''?`  $${(+x.unit).toFixed(2)}/${x.ui}${t!=null?'  ·  total $'+t.toFixed(2):''}`:null,`  Required at our facility by ${fmtD(x.reqDate)||'(see PO)'}`,
+      ...(x.dpas?['',`This is a DPAS-rated order (${x.dpas}) supporting DLA contract ${x.prime}.`]:[]),'','A Certificate of Conformance with lot traceability is required with the shipment. Please confirm receipt and your ship date.','',CFG.sig||''].filter(l=>l!=null).join('\n');
+    e.currentTarget.href=`mailto:${encodeURIComponent(x.supEmail)}?subject=${encodeURIComponent(`Purchase Order ${x.poNum}${x.pn?' · '+x.pn:''}${x.dpas?' · DPAS '+x.dpas:''}`)}&body=${encodeURIComponent(body)}`};
+}
+function poHtml(x,o){
+  const buyer=CFG.poBuyer||PO_BUYER_DEFAULT,lines=t=>esc(t||'').replace(/\n/g,'<br>');
+  const t=x.qty&&x.unit?x.qty*x.unit:null,m=n=>n==null||n===''?'':'$'+(+n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const reqs=PO_REQS.filter(([k])=>x.reqs&&x.reqs[k]).map(([,txt])=>txt);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>PO ${esc(x.poNum)}</title><style>
+  @page{size:letter;margin:.6in}body{font:12px/1.4 -apple-system,Segoe UI,Arial,sans-serif;color:#111;margin:0}
+  .hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #16224f;padding-bottom:10px;margin-bottom:14px}
+  h1{font-size:24px;margin:0;color:#16224f;letter-spacing:1px}.meta td{padding:1px 0 1px 12px;text-align:right}.meta td:first-child{color:#555}
+  .box{border:1px solid #bbb;border-radius:4px;padding:8px 10px}.lbl{font-size:10px;font-weight:700;text-transform:uppercase;color:#555;letter-spacing:.5px;margin-bottom:3px}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+  table.li{width:100%;border-collapse:collapse;margin-bottom:12px}table.li th{background:#16224f;color:#fff;text-align:left;padding:5px 6px;font-size:11px}table.li td{border-bottom:1px solid #ddd;padding:6px}
+  .r{text-align:right}.tot td{font-weight:700;border-bottom:none}.dpas{border:2px solid #16224f;background:#eef1fa;padding:8px 10px;margin-bottom:12px;font-weight:600}
+  ol{margin:4px 0 12px 18px;padding:0}li{margin-bottom:3px}.sig{display:grid;grid-template-columns:2fr 1fr;gap:30px;margin-top:30px}.sig div{border-top:1px solid #333;padding-top:3px;font-size:11px;color:#555}
+  </style></head><body>
+  <div class="hd"><div><b style="font-size:15px">${lines(buyer.split('\n')[0])}</b><br>${lines(buyer.split('\n').slice(1).join('\n'))}</div>
+  <div style="text-align:right"><h1>PURCHASE ORDER</h1><table class="meta"><tr><td>PO #</td><td><b>${esc(x.poNum)}</b></td></tr><tr><td>Date</td><td>${fmtD(x.date)}</td></tr>${x.quoteRef?`<tr><td>Your quote</td><td>${esc(x.quoteRef)}</td></tr>`:''}${x.prime?`<tr><td>Prime contract</td><td>${esc(x.prime)}</td></tr>`:''}</table></div></div>
+  <div class="g2"><div class="box"><div class="lbl">Vendor</div><b>${esc(x.supplier)}</b>${x.supCage?` (CAGE ${esc(x.supCage)})`:''}<br>${lines(x.supAddr)}${x.supAddr?'<br>':''}${x.supContact?'Attn: '+esc(x.supContact)+'<br>':''}${[x.supEmail,x.supPhone].filter(Boolean).map(esc).join(' · ')}</div>
+  <div class="box"><div class="lbl">Ship to</div>${lines(x.shipTo)}</div></div>
+  <div class="g4"><div class="box"><div class="lbl">Required by</div>${fmtD(x.reqDate)||'—'}</div><div class="box"><div class="lbl">Ship via</div>${esc(x.shipVia)}</div><div class="box"><div class="lbl">Terms</div>${esc(x.terms)}</div><div class="box"><div class="lbl">DPAS rating</div>${esc(x.dpas||'None')}</div></div>
+  ${x.dpas?`<div class="dpas">${esc(DPAS_TXT(x.dpas))}</div>`:''}
+  <table class="li"><thead><tr><th>Line</th><th>Part number</th><th>Description</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Amount</th></tr></thead><tbody>
+  <tr><td>1</td><td><b>${esc(x.pn)}</b>${x.mfrCage?`<br><span style="color:#555">Mfr CAGE ${esc(x.mfrCage)}</span>`:''}</td><td>${esc(x.desc)}${x.nsn?`<br><span style="color:#555">NSN ${esc(x.nsn)} (reference)</span>`:''}</td><td class="r">${esc(x.qty)}</td><td>${esc(x.ui)}</td><td class="r">${m(x.unit)}</td><td class="r">${m(t)}</td></tr>
+  <tr class="tot"><td colspan="6" class="r">Total</td><td class="r">${m(t)}</td></tr></tbody></table>
+  ${reqs.length?`<div class="lbl">Requirements</div><ol>${reqs.map(r=>`<li>${esc(r)}</li>`).join('')}</ol>`:''}
+  ${x.notes?`<div class="lbl">Notes</div><p style="margin:2px 0 12px">${lines(x.notes)}</p>`:''}
+  <div class="sig"><div>Authorized by, ${esc(buyer.split('\n')[0])}</div><div>Date</div></div>
+  </body></html>`;
 }
 // Auto Won / Lost: match pipeline RFQs to collected awards by purchase request number.
 async function autoOutcomes(){
