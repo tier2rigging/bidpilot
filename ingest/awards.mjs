@@ -23,7 +23,7 @@ const PDF_LIMIT = +(args[args.indexOf('--pdfs') + 1] || 0) || 600;
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const clean = (s) => (s || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+const clean = (s) => (s || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&raquo;/g, '»').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 const span = (tr, id) => clean((tr.match(new RegExp(`_${id}"[^>]*>([\\s\\S]*?)</span>\\s*(?:<br>\\s*)?</td>`)) || [])[1]);
 const usToIso = (s) => { const m = (s || '').match(/(\d{2})-(\d{2})-(\d{4})/); return m ? `${m[3]}-${m[1]}-${m[2]}` : ''; };
 const money = (s) => { const n = parseFloat(String(s || '').replace(/[$,\s]/g, '')); return Number.isFinite(n) ? n : null; };
@@ -97,14 +97,18 @@ async function awardsForDate(iso) {
 
 // Read quantity / unit / unit price from an award PDF. Accepts a line only when
 // qty x unit price matches a dollar total on the same line (within rounding).
+// Two layouts: older awards put "8 EA $729.00 $5,832.00 01FEB2027" on one line; DD 1155 purchase
+// orders write "8.000 EA $ 729.00 $ 5,832.00" and the date on its own line as "DELIVERY DATE: 2027 FEB 01".
+const MON = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' };
 export function parseLines(text) {
   const out = [];
+  const dd = text.match(/DELIVERY DATE:\s*(\d{4})\s+([A-Z]{3})\s+(\d{1,2})\b/);
+  const docDue = dd && MON[dd[2]] ? `${dd[1]}-${MON[dd[2]]}-${dd[3].padStart(2, '0')}` : null;
   for (const line of text.split(/\r?\n/)) {
-    const m = line.match(/([\d,]+(?:\.\d+)?)\s+([A-Z]{2})\s+\$([\d,]+\.\d{2,5})\s+\$([\d,]+\.\d{2})(?:\s+(\d{2})([A-Z]{3})(\d{4}))?/);
+    const m = line.match(/([\d,]+(?:\.\d+)?)\s+([A-Z]{2})\s+\$\s*([\d,]+\.\d{2,5})\s+\$\s*([\d,]+\.\d{2})(?:\s+(\d{2})([A-Z]{3})(\d{4}))?/);
     if (!m) continue;
     const qty = money(m[1]), unit = money(m[3]), tot = money(m[4]);
-    const MON = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' };
-    const due = m[5] && MON[m[6]] ? `${m[7]}-${MON[m[6]]}-${m[5]}` : null;
+    const due = m[5] && MON[m[6]] ? `${m[7]}-${MON[m[6]]}-${m[5]}` : docDue;
     if (qty && unit && Math.abs(qty * unit - tot) <= Math.max(0.05, tot * 0.001)) out.push({ qty, ui: m[2], unit, total: tot, due });
   }
   return out;
@@ -133,7 +137,11 @@ function loadAll() {
   for (const f of fs.readdirSync(DIR)) {
     if (!f.endsWith('.js')) continue;
     const t = fs.readFileSync(path.join(DIR, f), 'utf8');
-    for (const r of JSON.parse(t.slice(t.indexOf('['), t.lastIndexOf(']') + 1))) map.set(key(r), r);
+    for (const r of JSON.parse(t.slice(t.indexOf('['), t.lastIndexOf(']') + 1))) {
+      // Older runs saved "SPE7L127P1200 &raquo; Award/Basic Package View" as the contract number.
+      for (const i of [0, 1]) if (typeof r[i] === 'string') r[i] = r[i].split(/\s*(?:&raquo;|Â?»)/)[0].trim();
+      map.set(key(r), r);
+    }
   }
   return map;
 }
@@ -231,7 +239,7 @@ async function main() {
   let openNsn = new Set();
   try { const t = fs.readFileSync('data/rfqs.js', 'utf8'); openNsn = new Set(JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)).rows.map((r) => r[1])); } catch {}
   const rank = (r) => (isMine(r) ? 2 : openNsn.has(r[8]) ? 1 : 0);
-  const todo = [...map.values()].filter((r) => r[12] && (r[15] == null || (isMine(r) && r[16] == null)))
+  const todo = [...map.values()].filter((r) => r[12] && (r[15] == null || r[15] === -1 || (isMine(r) && r[16] == null)))
     .sort((a, b) => (rank(b) - rank(a)) || (b[6] || '').localeCompare(a[6] || ''));
   log(`PDF queue: ${todo.filter((r) => rank(r) === 2).length} yours, ${todo.filter((r) => rank(r) === 1).length} for open-RFQ NSNs, ${todo.filter((r) => rank(r) === 0).length} other`);
   for (const r of hasPdftotext ? todo : []) {
@@ -240,7 +248,7 @@ async function main() {
     try {
       const lines = parseLines(pdfText(await get(r[12], true)));
       const hit = lines.find((l) => r[5] == null || Math.abs(l.total - r[5]) < 0.05) || lines[0];
-      if (hit) { r[13] = hit.qty; r[14] = hit.ui; r[15] = hit.unit; } else r[15] = -1; // -1 = read, no price line found
+      if (hit) { r[13] = hit.qty; r[14] = hit.ui; r[15] = hit.unit; } else r[15] = -2; // -2 = read, no price line found (-1 = old parser miss, retried once)
       r[16] = (hit && hit.due) || ''; // '' = read, no delivery date found
     } catch (e) { log('pdf failed', r[1] || r[0], e.message); }
     if (n % 100 === 0) { saveAll(map); log(`${n} PDFs read`); }
