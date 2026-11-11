@@ -1,1 +1,1 @@
-window.AW_LOAD&&AW_LOAD("4925",[["SPE4A727P1808 &raquo; Award/Basic Package View","","","","56529",500,"2026-11-03","2026-11-03","4925015514472","SHELF PLATE, AIRCRAF","7017918982","SPE4A726T717N","https://dibbs2.bsm.dla.mil/Downloads/Awards/03NOV26/SPE4A727P1808.PDF",null,"",-1,""]]);
+window.AW_LOAD&&AW_LOAD("4925",[["SPE4A727P1808","","","","56529",500,"2026-11-03","2026-11-03","4925015514472","SHELF PLATE, AIRCRAF","7017918982","SPE4A726T717N","https://dibbs2.bsm.dla.mil/Downloads/Awards/03NOV26/SPE4A727P1808.PDF",null,"",-1,""]]);

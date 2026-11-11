@@ -1,1 +1,1 @@
-window.AW_LOAD&&AW_LOAD("5445",[["SPE8E927V0198 &raquo; Award/Basic Package View","","","","7Z016",8900.82,"2026-11-03","2026-11-03","5445009153121","SLEEVE, LOCK","7018730335","SPE8E927T0189","https://dibbs2.bsm.dla.mil/Downloads/Awards/03NOV26/SPE8E927V0198.PDF",null,"",-1,""]]);
+window.AW_LOAD&&AW_LOAD("5445",[["SPE8E927V0198","","","","7Z016",8900.82,"2026-11-03","2026-11-03","5445009153121","SLEEVE, LOCK","7018730335","SPE8E927T0189","https://dibbs2.bsm.dla.mil/Downloads/Awards/03NOV26/SPE8E927V0198.PDF",null,"",-1,""]]);

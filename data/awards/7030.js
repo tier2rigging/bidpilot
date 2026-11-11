@@ -1,1 +1,1 @@
-window.AW_LOAD&&AW_LOAD("7030",[["SPE8EN27P0116 &raquo; Award/Basic Package View","","","","1P4D9",2323,"2026-11-03","2026-11-03","7030015457824","SOFTWARE","7018788676","SPE8EN27T0199","https://dibbs2.bsm.dla.mil/Downloads/Awards/03NOV26/SPE8EN27P0116.PDF",null,"",null,null]]);
+window.AW_LOAD&&AW_LOAD("7030",[["SPE8EN27P0116","","","","1P4D9",2323,"2026-11-03","2026-11-03","7030015457824","SOFTWARE","7018788676","SPE8EN27T0199","https://dibbs2.bsm.dla.mil/Downloads/Awards/03NOV26/SPE8EN27P0116.PDF",null,"",null,null]]);

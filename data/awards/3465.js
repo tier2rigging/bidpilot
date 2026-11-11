@@ -1,1 +1,1 @@
-window.AW_LOAD&&AW_LOAD("3465",[["SPE8E527V0086 &raquo; Award/Basic Package View","","","","9U103",58,"2026-11-03","2026-11-03","3465014390879","BUSHING, DRILL, JIG","7018894738","SPE8E527T0360","https://dibbs2.bsm.dla.mil/Downloads/Awards/03NOV26/SPE8E527V0086.PDF",null,"",-1,""]]);
+window.AW_LOAD&&AW_LOAD("3465",[["SPE8E527V0086","","","","9U103",58,"2026-11-03","2026-11-03","3465014390879","BUSHING, DRILL, JIG","7018894738","SPE8E527T0360","https://dibbs2.bsm.dla.mil/Downloads/Awards/03NOV26/SPE8E527V0086.PDF",null,"",-1,""]]);
