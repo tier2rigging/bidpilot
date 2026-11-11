@@ -1552,7 +1552,7 @@ function ordForm(o){
   <div class="row2">${f('oInv','Invoice / WAWF #',o.invoice)}${f('oPaid','Paid (date)',o.paidDate,'date')}</div>
   <label>Notes</label><textarea id="oNotes" rows="3">${esc(o.notes||'')}</textarea><div class="small" style="margin-top:2px">Don't store passwords, bank or tax info here.</div>
   ${o.total&&o.supCost?`<div class="small" style="margin-top:6px">Gross profit: $${(o.total-o.supCost).toFixed(2)} (${((o.total-o.supCost)/o.total*100).toFixed(1)}%)</div>`:''}
-  <div style="display:flex;justify-content:space-between;margin-top:10px"><span><button class="btn p" id="oSave">Save</button> <button class="btn" id="oPo">📄 ${o.poData?'Open PO':'Create PO'}</button></span>${o.manual||(!o.auto&&CRM.orders[o.id])?'<button class="btn" id="oDel">Delete</button>':''}</div>`);
+  <div style="display:flex;justify-content:space-between;margin-top:10px"><span><button class="btn p" id="oSave">Save</button> <button class="btn" id="oMakePo">📄 ${o.poData?'Open PO':'Create PO'}</button></span>${o.manual||(!o.auto&&CRM.orders[o.id])?'<button class="btn" id="oDel">Delete</button>':''}</div>`);
   $('#mX').onclick=closeModal;
   const v=id=>$(id)?$(id).value.trim():undefined,nv=id=>{const x=v(id);return x===''||x===undefined?null:+x};
   $('#oSave').onclick=()=>{
@@ -1560,7 +1560,7 @@ function ordForm(o){
     if(!o.auto)Object.assign(rec,{manual:true,contract:v('#oCon'),order:v('#oOrd'),nsn:(v('#oNsn')||'').replace(/-/g,''),nom:v('#oNom'),qty:nv('#oQty'),unit:nv('#oUnit'),awardDate:v('#oAw'),total:nv('#oQty')!=null&&nv('#oUnit')!=null?nv('#oQty')*nv('#oUnit'):null});
     CRM.orders[o.id]=rec;crmSave();closeModal();renderOrd();
   };
-  $('#oPo').onclick=()=>{$('#oSave').onclick();poForm(allOrders().find(x=>x.id===o.id)||o)};
+  $('#oMakePo').onclick=()=>{$('#oSave').onclick();poForm(allOrders().find(x=>x.id===o.id)||o)};
   if($('#oDel'))$('#oDel').onclick=()=>{delete CRM.orders[o.id];CRM.deleted['o:'+o.id]=nowIso();crmSave();closeModal();renderOrd()};
 }
 // ---------- purchase orders to suppliers ----------
