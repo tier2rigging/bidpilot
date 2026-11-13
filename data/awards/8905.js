@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("8905",[["SPE3S126DZ202 SPE3S127F0137","","3","","64Q11",1306099.2,"2026-11-12","2026-11-12","8905015389113","BACON, PRECKD, SLICED","7019007156","","https://dibbs2.bsm.dla.mil/Downloads/Awards/15JAN26/SPE3S126DZ202.PDF",null,"",null,null]]);
