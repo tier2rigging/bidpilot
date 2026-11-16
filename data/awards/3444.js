@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("3444",[["SPE8E927V0288","","","","3BU33",1623.8,"2026-11-13","2026-11-13","3444014731548","CLAMP, TOGGLE, HAND","7018912680","SPE8E927T0336","https://dibbs2.bsm.dla.mil/Downloads/Awards/13NOV26/SPE8E927V0288.PDF",null,"",null,null]]);
