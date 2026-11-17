@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("7350",[["SPE2DS27P0028","","","","1KA59",2912,"2026-11-16","2026-11-16","7350014674327","TUBE, DRINKING","7017844518","","https://dibbs2.bsm.dla.mil/Downloads/Awards/16NOV26/SPE2DS27P0028.PDF",null,"",null,null]]);
