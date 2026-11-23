@@ -203,6 +203,7 @@ tbody tr:hover td{background:var(--hov)!important}
   #drawer{padding:14px 14px 40px}
 }
 @media (max-width:760px) and (prefers-color-scheme:dark){#tb tr.cur{background:#3a3112}}
+.modLnk{text-decoration:none;cursor:pointer}.modLnk:hover{filter:brightness(.92);text-decoration:underline}.modLnk2{font-size:11px;margin-left:2px}
 </style>
 </head>
 <body>
@@ -426,6 +427,8 @@ const SUG=new Map();
 function sugRefresh(){SUG.clear();for(const r of D.rows){const x=sugOf(r);if(x)SUG.set(key(r),x)}}
 // Every CAGE code opens its record on cage.dla.mil (the site shows its terms page first, then the result)
 const cageUrl=c=>`https://cage.dla.mil/Search/Results?q=${encodeURIComponent(c)}&page=1`;
+const modBase=c=>String(c||'').replace(/P\d{5}$/,'');
+const modA=c=>{c=String(c||'');if(!/P\d{5}$/.test(c))return esc(c);const b=modBase(c),m=c.slice(b.length);return `${esc(c)} <a class="tag t-warn modLnk" target="_blank" rel="noopener" href="https://www.usaspending.gov/keyword_search/${encodeURIComponent(b)}" title="Mod ${esc(m)}: open ${esc(b)} on USAspending to see every mod (type + dollar change). Small orders under $10K often aren't reported.">MOD</a> <a class="modLnk2" target="_blank" rel="noopener" href="https://sam.gov/search/?index=fpds&page=1&pageSize=25&sort=-modifiedDate&sfm%5BsimpleSearch%5D%5BkeywordRadio%5D=ALL&sfm%5BsimpleSearch%5D%5BkeywordTags%5D%5B0%5D%5Bkey%5D=${encodeURIComponent(b)}&sfm%5BsimpleSearch%5D%5BkeywordTags%5D%5B0%5D%5Bvalue%5D=${encodeURIComponent(b)}" title="Search ${esc(b)} in SAM.gov Contract Awards (sign-in required)">SAM</a>`};
 const cageA=c=>c?`<a class="cageLnk" target="_blank" rel="noopener" href="${cageUrl(c)}" title="Open CAGE ${esc(c)} on cage.dla.mil">${esc(c)}</a>`:'';
 const asWonLast=r=>{const x=lastAw(r);return !!(x&&(r[15]||[]).some(a=>a[0]===x.cage))};
 const FILES='https://dibbs2.bsm.dla.mil', DIBBS='https://www.dibbs.bsm.dla.mil';
@@ -1136,7 +1139,7 @@ function renderRfqHist(r,rows){
   if(rows===null){el.textContent='Not read yet. The daily job reads each RFQ\'s PDF; check back after the next run.';return}
   if(!rows.length){el.innerHTML='<b>No procurement history</b> in the RFQ. This NSN may never have been bought, or not in years.';return}
   const asC=new Set((r[15]||[]).map(a=>a[0]));
-  el.innerHTML=`<table class="aw"><tbody><tr><td><b>Date</b></td><td><b>CAGE</b></td><td><b>Qty</b></td><td><b>$/ea</b></td><td><b>Contract</b></td></tr>${rows.map(x=>`<tr><td>${esc(x[4])}</td><td>${cageA(x[0])}${asC.has(x[0])?' <span class="tag t-acc">AS</span>':''}</td><td>${x[2]}</td><td>$${(+x[3]).toFixed(2)}</td><td>${esc(x[1])}${/P\d{5}$/.test(x[1])?' <span class="tag t-warn">MOD</span>':''}${x[5]==='Y'?' <span class="tag t-warn">surplus</span>':''}</td></tr>`).join('')}</tbody></table>`;
+  el.innerHTML=`<table class="aw"><tbody><tr><td><b>Date</b></td><td><b>CAGE</b></td><td><b>Qty</b></td><td><b>$/ea</b></td><td><b>Contract</b></td></tr>${rows.map(x=>`<tr><td>${esc(x[4])}</td><td>${cageA(x[0])}${asC.has(x[0])?' <span class="tag t-acc">AS</span>':''}</td><td>${x[2]}</td><td>$${(+x[3]).toFixed(2)}</td><td>${modA(x[1])}${x[5]==='Y'?' <span class="tag t-warn">surplus</span>':''}</td></tr>`).join('')}</tbody></table>`;
 }
 async function nsnAwards(r){
   const el=$('#nsnAw'), f=/^\d{13}$/.test(r[1])?r[1].slice(0,4):'other';
