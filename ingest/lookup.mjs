@@ -102,8 +102,8 @@ export async function contractInfo(piid) {
   const id = a.generated_internal_id;
   const info = { piid: base, recipient: a['Recipient Name'] || '', amount: a['Award Amount'], start: a['Start Date'] || '', end: a['End Date'] || '', url: `https://www.usaspending.gov/award/${id}`, mods: [], sol: '' };
   try {
-    const t = await usPost('/transactions/', { award_id: id, limit: 25, sort: 'action_date', order: 'asc' });
-    info.mods = (t.results || []).map((x) => ({ mod: x.modification_number || '0', date: x.action_date || '', type: x.action_type_description || (x.modification_number === '0' ? 'Original award' : ''), amount: x.federal_action_obligation }));
+    const t = await usPost('/transactions/', { award_id: id, limit: 50, sort: 'action_date', order: 'asc' });
+    info.mods = (t.results || []).map((x) => ({ mod: x.modification_number || '0', date: x.action_date || '', type: x.action_type_description || (x.modification_number === '0' ? 'Original award' : ''), amount: x.federal_action_obligation, desc: (x.description || '').trim() }));
   } catch {}
   try {
     const r = await fetch(`${US}/awards/${encodeURIComponent(id)}/`); if (r.ok) { const d = await r.json(); info.sol = (d.latest_transaction_contract_data || {}).solicitation_identifier || ''; }
