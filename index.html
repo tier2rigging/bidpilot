@@ -429,6 +429,13 @@ function sugRefresh(){SUG.clear();for(const r of D.rows){const x=sugOf(r);if(x)S
 const cageUrl=c=>`https://cage.dla.mil/Search/Results?q=${encodeURIComponent(c)}&page=1`;
 const modBase=c=>String(c||'').replace(/P\d{5}$/,'');
 const modA=c=>{c=String(c||'');if(!/P\d{5}$/.test(c))return esc(c);const b=modBase(c),m=c.slice(b.length);return `${esc(c)} <a class="tag t-warn modLnk" target="_blank" rel="noopener" href="https://www.usaspending.gov/keyword_search/${encodeURIComponent(b)}" title="Mod ${esc(m)}: open ${esc(b)} on USAspending to see every mod (type + dollar change). Small orders under $10K often aren't reported.">MOD</a> <a class="modLnk2" target="_blank" rel="noopener" href="https://sam.gov/search/?index=fpds&page=1&pageSize=25&sort=-modifiedDate&sfm%5BsimpleSearch%5D%5BkeywordRadio%5D=ALL&sfm%5BsimpleSearch%5D%5BkeywordTags%5D%5B0%5D%5Bkey%5D=${encodeURIComponent(b)}&sfm%5BsimpleSearch%5D%5BkeywordTags%5D%5B0%5D%5Bvalue%5D=${encodeURIComponent(b)}" title="Search ${esc(b)} in SAM.gov Contract Awards (sign-in required)">SAM</a>`};
+// Classify a contract's mods (USAspending): cancelled/terminated or settled awards aren't real price comps.
+const modFlag=C=>{const M=(C&&C.mods||[]).filter(m=>m.mod&&m.mod!=='0'),t=m=>`${m.type||''} ${m.desc||''}`;
+  if(M.some(m=>/CANCEL|TERMINAT/i.test(t(m))))return 'cancelled';
+  if(M.some(m=>/SETTLEMENT/i.test(t(m))))return 'settled';
+  if(M.some(m=>m.amount<0))return 'reduced';return ''};
+const modTip={cancelled:'Cancelled or terminated: skip as a price comp.',settled:'Closed out by a settlement (usually after a termination): the award price is not a delivered price. Skip as a price comp.',reduced:'Money was taken off this award (often a quantity cut). Unit price may still be good, but check the mod.'};
+const modDesc=d=>{d=String(d||'').replace(/^[A-Z0-9-]{6,}!/,'');return d};
 const cageA=c=>c?`<a class="cageLnk" target="_blank" rel="noopener" href="${cageUrl(c)}" title="Open CAGE ${esc(c)} on cage.dla.mil">${esc(c)}</a>`:'';
 const asWonLast=r=>{const x=lastAw(r);return !!(x&&(r[15]||[]).some(a=>a[0]===x.cage))};
 const FILES='https://dibbs2.bsm.dla.mil', DIBBS='https://www.dibbs.bsm.dla.mil';
@@ -1152,14 +1159,14 @@ async function nsnAwards(r){
   if(!(hrows&&hrows.length)&&L&&(L.history||[]).length)hrows=L.history;
   renderRfqHist(r,hrows);
   const CT=(L&&L.contracts)||{};
-  const cancelled=c=>{const C=CT[String(c||'').replace(/P\d{5}$/,'')];return !!C&&(C.mods||[]).some(m=>/CANCEL|TERMINAT/i.test(m.type||''))};
+  const cancelled=c=>{const f=modFlag(CT[String(c||'').replace(/P\d{5}$/,'')]);return f==='cancelled'||f==='settled'};
   let priced=list.find(a=>a[15]>0&&a[5]!==0);
   const skipped=hrows?hrows.filter(x=>x[3]>0&&cancelled(x[1])):[];
   const h0=hrows&&hrows.find(x=>x[3]>0&&!cancelled(x[1]));
   if(h0&&(!priced||h0[4]>priced[6]))priced=[null,null,null,null,h0[0],null,h0[4],null,null,null,null,null,null,h0[2],'',h0[3]];
   const btn=$('#lastAw');
   if(priced){const yrs=(new Date(today)-new Date(priced[6]))/3.156e10, bid=priced[15]*Math.pow(1.03,Math.max(0,yrs));
-    $('#lastAwNote').textContent=`Last procurement $${priced[15].toFixed(2)}/ea on ${priced[6]} (CAGE ${priced[4]}).${yrs>=1?` That's ${yrs.toFixed(1)} years ago, so the +3%/yr adjustment matters.`:''}${skipped.length?` Skipped cancelled: ${skipped.map(x=>`$${x[3]} (${x[0]})`).join(', ')}.`:''}`;
+    $('#lastAwNote').textContent=`Last procurement $${priced[15].toFixed(2)}/ea on ${priced[6]} (CAGE ${priced[4]}).${yrs>=1?` That's ${yrs.toFixed(1)} years ago, so the +3%/yr adjustment matters.`:''}${skipped.length?` Skipped cancelled/settled: ${skipped.map(x=>`$${x[3]} (${x[0]})`).join(', ')}.`:''}`;
     DR_PTW=bid;btn.onclick=()=>{$('#pb2').value=bid.toFixed(2);mcalc()};mcalc()}
   else{btn.disabled=true;$('#lastAwNote').textContent='No priced award collected yet for this NSN.'}
   if(!list.length){el.textContent='No awards collected for this NSN yet. History builds from the first daily run onward.';return}
@@ -1405,8 +1412,8 @@ function showLookup(r,cached){
   ${sols.length?`<table class="aw"><tbody><tr class="small"><td>Solicitation</td><td>Status</td><td>PR</td><td>Qty</td><td>Issued</td><td>Return by</td><td></td></tr>${sols.map((x,i)=>{const inP=pipe[key(lkRow(r,x))];return `<tr><td>${esc(x.sol)}</td><td>${lkTag(x.status)}</td><td>${esc(x.pr||'')}</td><td>${x.qty??''}</td><td>${esc(x.issue||'')}</td><td>${esc(x.ret||'')}</td><td style="white-space:nowrap">${x.pdf?`<button class="btn p lkOpen" data-i="${i}" title="Read the RFQ PDF requirements and save">Open &amp; save</button>`:`<button class="btn lkSave" data-i="${i}">${inP?'Saved ✓':'Save'}</button> <a class="btn" target="_blank" rel="noopener" href="${FILES}/Downloads/RFQ/${esc(x.sol.slice(-1))}/${esc(x.sol)}.PDF">RFQ PDF</a>`}</td></tr>`}).join('')}</tbody></table>`:'<div class="small">No solicitations found.</div>'}
   ${(r.as||[]).length?`<h3 style="font-size:15px;margin:12px 0 4px">Approved sources</h3><table class="aw"><tbody>${r.as.map(a=>`<tr><td>${cageA(a[0])}</td><td>${esc(a[1])}</td><td>${esc(a[2]||'')}</td></tr>`).join('')}</tbody></table>`:''}
   <h3 style="font-size:15px;margin:12px 0 4px">Procurement history</h3>
-  ${H.length?`<table class="aw"><tbody><tr class="small"><td>CAGE</td><td>Contract</td><td>Qty</td><td>Unit $</td><td>Date</td></tr>${H.slice(0,15).map(h=>{const C=(r.contracts||{})[h[1].replace(/P\d{5}$/,'')];const mods=C?(C.mods||[]).filter(m=>m.mod&&m.mod!=='0'):[];const bad=mods.some(m=>/CANCEL|TERMINAT/i.test(m.type||''));
-    return `<tr><td>${esc(h[0])}${C&&C.recipient?`<br><span class="small">${esc(C.recipient)}</span>`:''}</td><td>${C?`<a target="_blank" rel="noopener" href="${esc(C.url)}" title="Open the contract record on USAspending">${esc(h[1])}</a>`:esc(h[1])}${bad?' <span class="tag t-warn">cancelled</span>':''}${C&&C.sol?`<br><span class="small">from <a href="#" class="lkSol" data-s="${esc(C.sol)}" title="Look up this solicitation">${esc(C.sol)}</a></span>`:''}${mods.map(m=>`<br><span class="small">${esc(m.mod)} · ${esc(m.date)} · ${esc((m.type||'').toLowerCase())}${m.amount?` · ${m.amount<0?'−':''}$${Math.abs(m.amount).toLocaleString()}`:''}</span>`).join('')}</td><td>${h[2]}</td><td>$${h[3]}</td><td>${esc(h[4])}</td></tr>`}).join('')}</tbody></table>`:'<div class="small">None in the RFQ PDF.</div>'}
+  ${H.length?`<table class="aw"><tbody><tr class="small"><td>CAGE</td><td>Contract</td><td>Qty</td><td>Unit $</td><td>Date</td></tr>${H.slice(0,15).map(h=>{const C=(r.contracts||{})[h[1].replace(/P\d{5}$/,'')];const mods=C?(C.mods||[]).filter(m=>m.mod&&m.mod!=='0'):[];const fl=modFlag(C);
+    return `<tr><td>${esc(h[0])}${C&&C.recipient?`<br><span class="small">${esc(C.recipient)}</span>`:''}</td><td>${C?`<a target="_blank" rel="noopener" href="${esc(C.url)}" title="Open the contract record on USAspending">${esc(h[1])}</a>`:esc(h[1])}${fl?` <span class="tag t-warn" title="${esc(modTip[fl])}">${fl}</span>`:''}${C&&mods.length&&C.amount!=null?`<br><span class="small">net obligated $${Number(C.amount).toLocaleString()}</span>`:''}${C&&C.sol?`<br><span class="small">from <a href="#" class="lkSol" data-s="${esc(C.sol)}" title="Look up this solicitation">${esc(C.sol)}</a></span>`:''}${mods.map(m=>`<br><span class="small">${esc(m.mod)} · ${esc(m.date)} · ${esc((m.type||'').toLowerCase())}${m.amount?` · ${m.amount<0?'−':''}$${Math.abs(m.amount).toLocaleString()}`:''}${modDesc(m.desc)?`<br><span class="small" style="opacity:.8;padding-left:10px">${esc(modDesc(m.desc))}</span>`:''}</span>`).join('')}</td><td>${h[2]}</td><td>$${h[3]}</td><td>${esc(h[4])}</td></tr>`}).join('')}</tbody></table>`:'<div class="small">None in the RFQ PDF.</div>'}
   <h3 style="font-size:15px;margin:12px 0 4px">Recent awards</h3>
   ${A.length?`<table class="aw"><tbody><tr class="small"><td>Awarded</td><td>Contract</td><td>CAGE</td><td>Total</td></tr>${A.slice(0,15).map(a=>`<tr><td>${esc(a.awardDate)}</td><td>${a.pdf?`<a target="_blank" rel="noopener" href="${esc(a.pdf)}">${esc(a.contract)}</a>`:esc(a.contract)}</td><td>${cageA(a.cage)}</td><td>${a.total!=null?'$'+a.total.toLocaleString():''}</td></tr>`).join('')}</tbody></table>`:'<div class="small">None found.</div>'}`);
   $('#modalBox').classList.add('wide');
