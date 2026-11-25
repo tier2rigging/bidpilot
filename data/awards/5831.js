@@ -1,0 +1,1 @@
+window.AW_LOAD&&AW_LOAD("5831",[["SPE4AX26DP001 SPE4AX27F5010","","444","","8X044",3,"2026-11-24","2026-11-24","5831009541559","CASE, MODULE","7018390998","","https://dibbs2.bsm.dla.mil/Downloads/Awards/23DEC25/SPE4AX26DP001.PDF",null,"",null,null]]);
